@@ -6,7 +6,7 @@ from swarm.config import verticals
 from swarm.models import Signal
 from swarm.settings import get_settings
 from swarm.sources.base import SourceAdapter
-from swarm.sources.routing import hint_verticals
+from swarm.sources.routing import contains_keyword, hint_verticals
 
 
 class HackerNewsSource(SourceAdapter):
@@ -55,10 +55,9 @@ class HackerNewsSource(SourceAdapter):
 
 
 def _mentions_any_keyword(title: str) -> bool:
-    blob = title.lower()
     for v in verticals():
         for kw in v.get("hn_keywords") or []:
-            if kw.lower() in blob:
+            if contains_keyword(title, kw):
                 return True
     return False
 

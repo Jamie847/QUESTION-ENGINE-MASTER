@@ -28,17 +28,24 @@ class RedditSource(SourceAdapter):
             "Accept": "application/json",
         }
         signals: list[Signal] = []
+        blocked = 0
         async with httpx.AsyncClient(timeout=settings.source_timeout_s, headers=headers) as client:
             for sub in seen_subs:
-                url = f"https://www.reddit.com/r/{sub}/hot.json?limit=12"
-                try:
-                    resp = await client.get(url)
-                    if resp.status_code in {401, 403, 429}:
-                        # Datacenter IPs often get blocked. Degrade this sub, not the run.
+                fetched = False
+                for host in ("https://www.reddit.com", "https://old.reddit.com"):
+                    url = f"{host}/r/{sub}/hot.json?limit=12"
+                    try:
+                        resp = await client.get(url)
+                        if resp.status_code in {401, 403, 429}:
+                            continue
+                        resp.raise_for_status()
+                        children = (resp.json().get("data") or {}).get("children") or []
+                        fetched = True
+                        break
+                    except (httpx.HTTPError, ValueError):
                         continue
-                    resp.raise_for_status()
-                    children = (resp.json().get("data") or {}).get("children") or []
-                except (httpx.HTTPError, ValueError):
+                if not fetched:
+                    blocked += 1
                     continue
                 for child in children:
                     data = child.get("data") or {}
@@ -64,6 +71,8 @@ class RedditSource(SourceAdapter):
                             raw={"subreddit": sub, "ups": data.get("ups")},
                         )
                     )
+        if not signals and blocked:
+            raise RuntimeError(f"reddit blocked or empty on {blocked} subreddits")
         return signals
 
 

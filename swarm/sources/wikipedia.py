@@ -12,6 +12,7 @@ from swarm.sources.routing import hint_verticals
 
 SKIP_PREFIXES = (
     "main_page",
+    "main page",
     "special:",
     "wikipedia:",
     "portal:",
@@ -22,6 +23,15 @@ SKIP_PREFIXES = (
     "help:",
     "user:",
     "talk:",
+)
+SKIP_IF_CONTAINS = (
+    "(film)",
+    "(tv series)",
+    "(album)",
+    "(song)",
+    "(book)",
+    "(novel)",
+    "(video game)",
 )
 
 
@@ -46,7 +56,10 @@ class WikipediaSource(SourceAdapter):
         signals: list[Signal] = []
         for art in articles:
             title = (art.get("article") or "").replace("_", " ")
-            if not title or title.lower().startswith(SKIP_PREFIXES):
+            low = title.lower()
+            if not title or low.startswith(SKIP_PREFIXES):
+                continue
+            if any(tok in low for tok in SKIP_IF_CONTAINS):
                 continue
             hints = hint_verticals(title, verticals())
             if not hints:

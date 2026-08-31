@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import threading
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -21,16 +22,18 @@ from swarm.taste import load_seed_profile
 APP_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(APP_DIR / "templates"))
 
-app = FastAPI(title="Question Engine")
-app.mount("/static", StaticFiles(directory=str(APP_DIR / "static")), name="static")
-
 _run_thread: threading.Thread | None = None
 _run_lock = threading.Lock()
 
 
-@app.on_event("startup")
-def _startup() -> None:
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
     init_db()
+    yield
+
+
+app = FastAPI(title="Question Engine", lifespan=lifespan)
+app.mount("/static", StaticFiles(directory=str(APP_DIR / "static")), name="static")
 
 
 @app.middleware("http")

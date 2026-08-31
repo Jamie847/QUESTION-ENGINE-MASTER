@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     source_timeout_s: float = 12.0
     lock_stale_after_s: int = 7200
     dedup_lookback_days: int = 45
-    dedup_threshold: float = 0.58
+    dedup_threshold: float = 0.64
     user_agent: str = (
         "QuestionEngine/1.0 (personal research digest; +https://render.com)"
     )

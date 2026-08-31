@@ -33,3 +33,10 @@ def test_distinct_questions_survive():
     out = mark_duplicates([a, b], [], threshold=0.58)
     assert all(q.status != QuestionStatus.duplicate for q in out)
     assert similarity(a.text, b.text) < 0.5
+
+
+def test_shared_template_does_not_force_duplicate():
+    a = _q("What if the consensus read of Claude Code Auto Mode is inverted — who is already positioned for the reverse?", "a")
+    b = _q("What if the consensus read of Cialis as a longevity drug is inverted — who is already positioned for the reverse?", "b")
+    out = mark_duplicates([a, b], [], threshold=0.58)
+    assert all(q.status != QuestionStatus.duplicate for q in out)

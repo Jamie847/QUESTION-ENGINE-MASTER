@@ -8,6 +8,22 @@ from swarm.models import Question, QuestionStatus
 
 _PUNCT = re.compile(r"[^\w\s]")
 _SPACE = re.compile(r"\s+")
+_STOP = {
+    "what", "if", "the", "a", "an", "of", "is", "who", "already", "positioned",
+    "for", "reverse", "and", "document", "would", "prove", "it", "stalls",
+    "rather", "than", "compounds", "which", "budgets", "headcounts", "are",
+    "stranded", "because", "they", "treated", "as", "weather", "profits",
+    "story", "around", "mostly", "measurement", "artifact", "still", "true",
+    "in", "five", "years", "unglamorous", "institution", "has", "to",
+    "absorb", "overflow", "anyone", "staffing", "becomes", "scarce", "keep",
+    "moving", "on", "same", "calendar", "job", "that", "looks", "safe",
+    "today", "actually", "buffer", "about", "delete", "can", "be", "built",
+    "now", "people", "living", "between", "could", "not", "ship", "twelve",
+    "months", "ago", "where", "information", "gap", "operators", "touched",
+    "vendors", "selling", "last", "year", "workflow", "ignored", "buyer",
+    "created", "weekend", "experiment", "find", "them", "consensus", "read",
+    "inverted", "how", "does", "this", "with", "from", "when", "will",
+}
 
 
 def normalize(text: str) -> str:
@@ -17,8 +33,16 @@ def normalize(text: str) -> str:
     return text
 
 
+def content_tokens(text: str) -> set[str]:
+    return {w for w in normalize(text).split() if w not in _STOP and len(w) > 2}
+
+
 def similarity(a: str, b: str) -> float:
-    return fuzz.token_set_ratio(normalize(a), normalize(b)) / 100.0
+    """Compare the *payload* of two questions, not the shared template words."""
+    ua, ub = content_tokens(a), content_tokens(b)
+    if len(ua) >= 2 and len(ub) >= 2:
+        return len(ua & ub) / len(ua | ub)
+    return fuzz.ratio(normalize(a), normalize(b)) / 100.0
 
 
 def mark_duplicates(

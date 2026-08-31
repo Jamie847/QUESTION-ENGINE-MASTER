@@ -150,7 +150,7 @@ def _execute(run_id: int) -> None:
 
     if StageName.scout.value not in done:
         _set_stage(run_id, StageName.scout)
-        briefs = run_scouts(signals, llm)
+        briefs = run_scouts(signals, llm, run_id=run_id)
         if not briefs:
             raise RuntimeError("scout produced no briefs")
         _persist_briefs(run_id, briefs)
@@ -160,7 +160,7 @@ def _execute(run_id: int) -> None:
 
     if StageName.cross_pollinate.value not in done:
         _set_stage(run_id, StageName.cross_pollinate)
-        intersections = run_cross_pollinator(briefs, llm)
+        intersections = run_cross_pollinator(briefs, llm, run_id=run_id)
         _persist_intersections(run_id, intersections)
         _checkpoint(run_id, StageName.cross_pollinate, warnings=warnings)
     else:
@@ -168,7 +168,7 @@ def _execute(run_id: int) -> None:
 
     if StageName.smith.value not in done:
         _set_stage(run_id, StageName.smith)
-        questions = run_smiths(briefs, intersections, taste, llm)
+        questions = run_smiths(briefs, intersections, taste, llm, run_id=run_id)
         if not questions:
             raise RuntimeError("smiths produced no questions")
         _persist_questions(run_id, questions, replace=True)
@@ -492,10 +492,21 @@ def _load_questions(run_id: int) -> list[Question]:
 
 def _prior_question_texts(run_id: int, lookback_days: int) -> list[str]:
     cutoff = datetime.now(timezone.utc) - timedelta(days=lookback_days)
+    today = date.today()
     with session_scope() as session:
+        today_run_ids: list[int] = []
+        for run in session.scalars(select(RunRow)).all():
+            started = run.started_at
+            if started is None:
+                continue
+            if started.tzinfo is None:
+                started = started.replace(tzinfo=timezone.utc)
+            if started.astimezone(timezone.utc).date() == today:
+                today_run_ids.append(run.id)
         rows = session.scalars(
             select(QuestionRow)
             .where(QuestionRow.run_id != run_id)
+            .where(QuestionRow.run_id.notin_(today_run_ids or [-1]))
             .where(QuestionRow.status == QuestionStatus.curated.value)
             .where(QuestionRow.created_at >= cutoff)
         ).all()

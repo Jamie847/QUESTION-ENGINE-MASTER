@@ -46,7 +46,7 @@ BRIEF_SCHEMA = {
 }
 
 
-def run_scouts(signals: list[Signal], llm: LLM) -> list[Brief]:
+def run_scouts(signals: list[Signal], llm: LLM, *, run_id: int = 0) -> list[Brief]:
     briefs: list[Brief] = []
     for cfg in verticals():
         subset = [s for s in signals if cfg["id"] in (s.vertical_hints or [])]
@@ -54,12 +54,16 @@ def run_scouts(signals: list[Signal], llm: LLM) -> list[Brief]:
             # last resort: keyword-unassigned high-score items, lightly
             subset = [s for s in signals if not s.vertical_hints][:8]
         subset = sorted(subset, key=lambda s: s.score, reverse=True)[:18]
-        produced = _llm_briefs(cfg, subset, llm) or _fallback_briefs(cfg, subset)
+        produced = _llm_briefs(cfg, subset, llm, run_id) or _fallback_briefs(
+            cfg, subset, run_id
+        )
         briefs.extend(produced)
     return briefs
 
 
-def _llm_briefs(cfg: dict, signals: list[Signal], llm: LLM) -> list[Brief] | None:
+def _llm_briefs(
+    cfg: dict, signals: list[Signal], llm: LLM, run_id: int
+) -> list[Brief] | None:
     if not signals or not llm.available:
         return None
     lines = [f"- {s.title} ({s.source}, score={s.score:.1f}) {s.url}" for s in signals]
@@ -74,7 +78,7 @@ def _llm_briefs(cfg: dict, signals: list[Signal], llm: LLM) -> list[Brief] | Non
             headline = raw["headline"]
             out.append(
                 Brief(
-                    id=f"{cfg['id']}-{slug(headline)}",
+                    id=f"r{run_id}-{cfg['id']}-{slug(headline)}",
                     vertical=cfg["id"],
                     headline=headline,
                     what_is_happening=raw.get("what_is_happening", ""),
@@ -91,13 +95,13 @@ def _llm_briefs(cfg: dict, signals: list[Signal], llm: LLM) -> list[Brief] | Non
     return out or None
 
 
-def _fallback_briefs(cfg: dict, signals: list[Signal]) -> list[Brief]:
+def _fallback_briefs(cfg: dict, signals: list[Signal], run_id: int) -> list[Brief]:
     out: list[Brief] = []
     for sig in signals[:6]:
         velocity = Velocity.accelerating if sig.score >= 8 else Velocity.steady
         out.append(
             Brief(
-                id=f"{cfg['id']}-{slug(sig.title)}",
+                id=f"r{run_id}-{cfg['id']}-{slug(sig.title)}",
                 vertical=cfg["id"],
                 headline=sig.title,
                 what_is_happening=sig.snippet or sig.title,

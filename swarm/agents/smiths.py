@@ -6,6 +6,7 @@ from swarm.config import lenses
 from swarm.ids import slug
 from swarm.llm import LLM
 from swarm.models import Brief, Coverage, DecayClass, Intersection, Question, TasteProfile
+from swarm.sources.routing import topic
 from swarm.taste import profile_for_prompt
 
 PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "smith.md").read_text(
@@ -50,7 +51,7 @@ TEMPLATES = {
     ],
     "second_order": [
         "If {a} is still true in five years, which unglamorous institution has to absorb the overflow — and is anyone staffing it?",
-        "What becomes scarce if {a} and {b} keep accelerating on the same calendar?",
+        "What becomes scarce if {a} and {b} keep moving on the same calendar?",
         "Which job that looks safe today is actually the buffer that {a} is about to delete?",
     ],
     "opportunity": [
@@ -66,12 +67,14 @@ def run_smiths(
     intersections: list[Intersection],
     taste: TasteProfile,
     llm: LLM,
+    *,
+    run_id: int = 0,
 ) -> list[Question]:
     accepted = [i for i in intersections if i.accepted]
     questions: list[Question] = []
     for lens in lenses():
-        produced = _llm(lens, briefs, accepted, taste, llm) or _fallback(
-            lens, briefs, accepted
+        produced = _llm(lens, briefs, accepted, taste, llm, run_id) or _fallback(
+            lens, briefs, accepted, run_id
         )
         questions.extend(produced)
     return questions
@@ -83,6 +86,7 @@ def _llm(
     intersections: list[Intersection],
     taste: TasteProfile,
     llm: LLM,
+    run_id: int,
 ) -> list[Question] | None:
     if not llm.available:
         return None
@@ -116,7 +120,7 @@ def _llm(
             )
             out.append(
                 Question(
-                    id=f"{lens['id']}-{slug(text)}",
+                    id=f"r{run_id}-{lens['id']}-{slug(text)}",
                     text=text,
                     lens=lens["id"],
                     verticals=raw.get("verticals") or (inter.verticals if inter else []),
@@ -133,7 +137,7 @@ def _llm(
 
 
 def _fallback(
-    lens: dict, briefs: list[Brief], intersections: list[Intersection]
+    lens: dict, briefs: list[Brief], intersections: list[Intersection], run_id: int
 ) -> list[Question]:
     templates = TEMPLATES.get(lens["id"], TEMPLATES["opportunity"])
     out: list[Question] = []
@@ -148,13 +152,20 @@ def _fallback(
             brief_ids=[briefs[0].id] if briefs else [],
         )
     ]
+    used_briefs: set[str] = set()
     for tmpl, inter in zip(templates, pairs):
-        a = _short(inter.thesis)
-        b = _other(inter, briefs)
+        related = [b for b in briefs if b.id in (inter.brief_ids or [])]
+        a = topic(related[0].headline, words=12) if related else topic(inter.thesis, words=12)
+        b = (
+            topic(related[1].headline, words=12)
+            if len(related) > 1
+            else _other_topic(inter, briefs)
+        )
         text = tmpl.format(a=a, b=b)
+        used_briefs.update(inter.brief_ids or [])
         out.append(
             Question(
-                id=f"{lens['id']}-{slug(text)}",
+                id=f"r{run_id}-{lens['id']}-{slug(text)}",
                 text=text,
                 lens=lens["id"],
                 verticals=inter.verticals,
@@ -165,18 +176,31 @@ def _fallback(
                 context=inter.thesis,
             )
         )
+    # One extra question per unused top brief so the bank is not just pairings.
+    leftovers = [b for b in briefs if b.id not in used_briefs][:3]
+    single = templates[0]
+    for brief in leftovers:
+        a = topic(brief.headline, words=12)
+        text = single.format(a=a, b="the adjacent market nobody is staffing")
+        out.append(
+            Question(
+                id=f"r{run_id}-{lens['id']}-{slug(text)}",
+                text=text,
+                lens=lens["id"],
+                verticals=[brief.vertical],
+                coverage=Coverage.unknown,
+                decay_class=DecayClass.slow,
+                brief_ids=[brief.id],
+                context=brief.why_now,
+            )
+        )
     return out
 
 
-def _short(text: str, n: int = 90) -> str:
-    text = text.strip().rstrip(".")
-    return text if len(text) <= n else text[: n - 1].rsplit(" ", 1)[0] + "…"
-
-
-def _other(inter: Intersection, briefs: list[Brief]) -> str:
+def _other_topic(inter: Intersection, briefs: list[Brief]) -> str:
     for b in briefs:
         if b.id not in inter.brief_ids:
-            return _short(b.headline, 70)
+            return topic(b.headline, words=8)
     if len(inter.verticals) > 1:
         return inter.verticals[-1]
     return "the adjacent vertical nobody is staffing"
