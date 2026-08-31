@@ -17,7 +17,10 @@ python -m swarm.run_daily
 uvicorn dashboard.main:app --host 0.0.0.0 --port 43417
 ```
 
-Open `http://127.0.0.1:43417`. The swarm works **without API keys**: Hacker News, Reddit, and Wikipedia are fetched live; a heuristic writer drafts briefs and questions; a seeded taste file keeps the curator opinionated. Add `ANTHROPIC_API_KEY` (and optionally `BRAVE_API_KEY` / `PERPLEXITY_API_KEY`) to upgrade quality.
+Open `http://127.0.0.1:43417`. The swarm runs without keys (Hacker News + Wikipedia; Reddit if the host allows it), but that path is a **heuristic fallback**. Do not judge question quality until `ANTHROPIC_API_KEY` and `BRAVE_API_KEY` are set — HN alone is too narrow for Health and Business, and the writer is template-shaped by design.
+
+- `ANTHROPIC_MODEL` (default `claude-sonnet-4-5`) — scouts and smiths
+- `JUDGMENT_MODEL` (default `claude-opus-4-5`) — cross-pollinator and curator. This is the one place not to economize.
 
 `ACCESS_TOKEN` locks the dashboard. Leave it empty locally.
 
@@ -42,7 +45,11 @@ Open `http://127.0.0.1:43417`. The swarm works **without API keys**: Hacker News
 
 ## Deploy on Render
 
-`render.yaml` defines the web service, the 10:00 UTC cron, and Postgres. On first deploy you will be prompted for the API keys (`sync: false`). The dashboard binds `0.0.0.0:$PORT`. Set `ANTHROPIC_API_KEY` when you want model-written questions; the rest can stay empty.
+`render.yaml` defines the web service, the 10:00 UTC cron, and Postgres. On first deploy you will be prompted for `ANTHROPIC_API_KEY` and `BRAVE_API_KEY` (`sync: false`). The dashboard binds `0.0.0.0:$PORT`.
+
+Suggested order: keys in → deploy → three real Opus-curated digests → rate everything → then decide between prompt work and adding the ideator. Do not add agents until the thin swarm is worth reading.
+
+Replace `data/taste_seed.yaml` with your own voice, or drop `taste/seed.yaml` (preferred if present). That file needs you, not a stand-in.
 
 ## Tests
 
@@ -52,4 +59,4 @@ pytest -q
 
 ## What is intentionally not here yet
 
-Ideator, resurrection timeline, weekly taste-profile compressor, eval harness, Perplexity-backed coverage, and extra verticals/lenses. Use the first weeks of real digests and ratings to freeze an eval set — do not hand-write one before the swarm has a voice.
+Ideator, resurrection timeline, weekly taste-profile compressor, eval harness, Perplexity-backed coverage, and extra verticals/lenses. Held until three keyed digests have been read and rated. If those are generic, the fix is prompt work, not more agents.

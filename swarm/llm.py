@@ -31,15 +31,23 @@ class LLM:
         reserve: bool = False,
         estimate_in: int = 2500,
         estimate_out: int = 1500,
+        judgment: bool = False,
     ) -> dict[str, Any] | None:
         if not self.available:
             return None
-        estimate = self.budget.estimate_tokens(estimate_in, estimate_out)
+        model = (
+            self.settings.judgment_model
+            if judgment
+            else self.settings.anthropic_model
+        )
+        estimate = self.budget.estimate_tokens(
+            estimate_in, estimate_out, judgment=judgment
+        )
         if not self.budget.can_spend(estimate, reserve=reserve):
             return None
         try:
             msg = self._client.messages.create(  # type: ignore[union-attr]
-                model=self.settings.anthropic_model,
+                model=model,
                 max_tokens=max_tokens,
                 system=system,
                 messages=[{"role": "user", "content": user}],
@@ -61,6 +69,7 @@ class LLM:
                 self.budget.estimate_tokens(
                     getattr(usage, "input_tokens", 0) or 0,
                     getattr(usage, "output_tokens", 0) or 0,
+                    judgment=judgment,
                 )
             )
         else:

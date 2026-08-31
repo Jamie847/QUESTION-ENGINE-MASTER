@@ -199,6 +199,12 @@ def _execute(run_id: int) -> None:
         if not llm.available:
             warnings.append("ANTHROPIC_API_KEY unset — heuristic writer used")
             degraded = True
+        else:
+            warnings.append(
+                f"volume model {settings.anthropic_model}; "
+                f"judgment model {settings.judgment_model} "
+                f"(cross-pollinator + curator)"
+            )
         doc = render_digest(
             day=date.today(),
             briefs=briefs,

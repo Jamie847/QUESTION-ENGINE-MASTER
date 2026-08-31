@@ -6,11 +6,24 @@ import yaml
 
 from swarm.models import TasteExample, TasteProfile
 
-SEED_PATH = Path(__file__).resolve().parent.parent / "data" / "taste_seed.yaml"
+ROOT = Path(__file__).resolve().parent.parent
+# Prefer a user-authored seed. The bundled file is a stand-in until you
+# drop your own voice in taste/seed.yaml.
+SEED_CANDIDATES = (
+    ROOT / "taste" / "seed.yaml",
+    ROOT / "data" / "taste_seed.yaml",
+)
+
+
+def _seed_path() -> Path:
+    for path in SEED_CANDIDATES:
+        if path.exists():
+            return path
+    raise FileNotFoundError("no taste seed found")
 
 
 def load_seed_profile() -> TasteProfile:
-    raw = yaml.safe_load(SEED_PATH.read_text(encoding="utf-8")) or {}
+    raw = yaml.safe_load(_seed_path().read_text(encoding="utf-8")) or {}
     keeps = [
         TasteExample(stars=row["stars"], question=_clean(row["question"]), why=row.get("why", ""), keep=True)
         for row in raw.get("keeps") or []

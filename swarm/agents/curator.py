@@ -112,7 +112,10 @@ def _llm(
         user="CANDIDATES:\n" + "\n".join(lines),
         schema=SCHEMA,
         reserve=True,
+        judgment=True,
         max_tokens=4000,
+        estimate_in=4000,
+        estimate_out=2000,
     )
     if not data:
         return None

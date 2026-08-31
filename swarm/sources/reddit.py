@@ -24,7 +24,7 @@ class RedditSource(SourceAdapter):
                 seen_subs.append(sub)
 
         headers = {
-            "User-Agent": settings.user_agent,
+            "User-Agent": settings.reddit_user_agent,
             "Accept": "application/json",
         }
         signals: list[Signal] = []

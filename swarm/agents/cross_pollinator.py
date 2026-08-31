@@ -73,7 +73,10 @@ def _llm(briefs: list[Brief], llm: LLM, run_id: int) -> list[Intersection] | Non
         user="Today's briefs:\n" + "\n".join(lines),
         schema=SCHEMA,
         reserve=True,
+        judgment=True,
         max_tokens=5000,
+        estimate_in=4000,
+        estimate_out=2500,
     )
     if not data:
         return None

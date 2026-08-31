@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     access_token: str = ""
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-sonnet-4-5"
+    judgment_model: str = "claude-opus-4-5"
     brave_api_key: str = ""
     perplexity_api_key: str = ""
     daily_budget_usd: float = 2.0
@@ -28,6 +29,9 @@ class Settings(BaseSettings):
     dedup_threshold: float = 0.64
     user_agent: str = (
         "QuestionEngine/1.0 (personal research digest; +https://render.com)"
+    )
+    reddit_user_agent: str = (
+        "python:question-engine:1.0 (by /u/QuestionEngine; personal research digest)"
     )
 
     @property

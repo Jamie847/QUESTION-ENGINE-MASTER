@@ -9,7 +9,7 @@ class RunBudget:
     """Hard dollar cap. Curator + archive are reserved so a spendy
     scout cannot starve the quality gate."""
 
-    def __init__(self, limit_usd: float, reserved_usd: float = 0.35) -> None:
+    def __init__(self, limit_usd: float, reserved_usd: float = 0.80) -> None:
         self.limit_usd = max(0.0, limit_usd)
         self.reserved_usd = min(reserved_usd, self.limit_usd)
         self.spent_usd = 0.0
@@ -35,6 +35,10 @@ class RunBudget:
                 f"run budget exceeded: ${self.spent_usd:.3f} > ${self.limit_usd:.2f}"
             )
 
-    def estimate_tokens(self, input_tokens: int, output_tokens: int) -> float:
-        # Sonnet-class ballpark; used for reservation before a call.
+    def estimate_tokens(
+        self, input_tokens: int, output_tokens: int, *, judgment: bool = False
+    ) -> float:
+        # Sonnet-class vs Opus-class ballpark for reservation before a call.
+        if judgment:
+            return (input_tokens / 1_000_000) * 15.0 + (output_tokens / 1_000_000) * 75.0
         return (input_tokens / 1_000_000) * 3.0 + (output_tokens / 1_000_000) * 15.0
