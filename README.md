@@ -45,9 +45,28 @@ Open `http://127.0.0.1:43417`. The swarm runs without keys (Hacker News + Wikipe
 
 ## Deploy on Render
 
-`render.yaml` defines the web service, the 10:00 UTC cron, and Postgres. On first deploy you will be prompted for `ANTHROPIC_API_KEY` and `BRAVE_API_KEY` (`sync: false`). The dashboard binds `0.0.0.0:$PORT`.
+`render.yaml` is the whole deploy. It creates three things in one Blueprint:
 
-Suggested order: keys in → deploy → three real Opus-curated digests → rate everything → then decide between prompt work and adding the ideator. Do not add agents until the thin swarm is worth reading.
+| Resource | Name | Role |
+|---|---|---|
+| Postgres | `question-engine-db` | Canonical store (digests, questions, ratings, run lock) |
+| Web | `question-engine-dashboard` | FastAPI UI, binds `0.0.0.0:$PORT`, health at `/health` |
+| Cron | `question-engine-swarm` | `python -m swarm.run_daily` at 10:00 UTC |
+
+### Hand this to Claude Cowork (or apply it yourself)
+
+1. Put this repo on GitHub (Render cannot clone a Cursor-only remote).
+2. In the Render dashboard, open **My Workspace** → **New Blueprint** → point it at this repo / `render.yaml`.
+3. When prompted, paste:
+   - `ANTHROPIC_API_KEY` (required for a real digest)
+   - `BRAVE_API_KEY` (required for Health and Business scouts)
+   - `PERPLEXITY_API_KEY` (optional — leave blank)
+4. `ACCESS_TOKEN` is auto-generated. Copy it from the env group after deploy and open `https://<service>.onrender.com/?token=…`.
+5. After the first deploy is live, trigger an immediate run from **Controls** (do not wait for 10:00 UTC). Check source health: Brave and HN should be up; Reddit may be DOWN — leave it.
+
+Do not add an ideator, resurrection agent, or extra verticals on this deploy. Three keyed digests first.
+
+Suggested order: keys in → Blueprint apply → three real Opus-curated days → rate everything → then prompts vs ideator.
 
 Replace `data/taste_seed.yaml` with your own voice, or drop `taste/seed.yaml` (preferred if present). That file needs you, not a stand-in.
 
