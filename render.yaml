@@ -1,0 +1,56 @@
+# Question Engine — Render Blueprint
+# Web dashboard + daily swarm cron + Postgres. Secrets are prompted
+# on first deploy (sync: false). The swarm runs without paid search
+# keys; Anthropic is the only key that upgrades question quality.
+
+databases:
+  - name: question-engine-db
+    plan: basic-256mb
+    databaseName: question_engine
+    user: question_engine
+
+envVarGroups:
+  - name: question-engine-secrets
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ANTHROPIC_MODEL
+        value: claude-sonnet-4-5
+      - key: BRAVE_API_KEY
+        sync: false
+      - key: PERPLEXITY_API_KEY
+        sync: false
+      - key: ACCESS_TOKEN
+        generateValue: true
+      - key: DAILY_BUDGET_USD
+        value: "2.00"
+      - key: PYTHON_VERSION
+        value: "3.12.3"
+
+services:
+  - type: web
+    name: question-engine-dashboard
+    runtime: python
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn dashboard.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: question-engine-db
+          property: connectionString
+      - fromGroup: question-engine-secrets
+
+  - type: cron
+    name: question-engine-swarm
+    runtime: python
+    schedule: "0 10 * * *"
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m swarm.run_daily
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: question-engine-db
+          property: connectionString
+      - fromGroup: question-engine-secrets

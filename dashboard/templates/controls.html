@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Controls — Question Engine{% endblock %}
+{% block body %}
+<section class="lede">
+  <p class="kicker">Controls</p>
+  <h1>Run the swarm. Watch the sources.</h1>
+  <p>Daily cron is 10:00 UTC on Render. You can fire it here any time. A run lock stops two swarms from overlapping.</p>
+</section>
+
+<section class="run-box">
+  <button type="button" id="run-btn" class="primary">Run swarm now</button>
+  <p class="muted" id="run-msg">
+    Budget ${{ "%.2f"|format(settings.daily_budget_usd) }} ·
+    model {{ settings.anthropic_model }} ·
+    {% if settings.anthropic_api_key %}Anthropic live{% else %}heuristic writer (no API key){% endif %}
+  </p>
+</section>
+
+<section>
+  <h2>Verticals &amp; lenses (Phase 1)</h2>
+  <p class="hint">Thinner swarm on purpose. Edit <code>swarm/config/*.yaml</code> to add more — no new Python.</p>
+  <ul class="stats">
+    {% for v in verticals %}<li>Vertical <strong>{{ v.name }}</strong></li>{% endfor %}
+    {% for ln in lenses %}<li>Lens <strong>{{ ln.name }}</strong></li>{% endfor %}
+  </ul>
+</section>
+
+<section>
+  <h2>Recent runs</h2>
+  {% if not runs %}
+  <p class="muted">No runs recorded.</p>
+  {% endif %}
+  <table class="runs">
+    <thead>
+      <tr><th>ID</th><th>Status</th><th>Stage</th><th>Cost</th><th>Started</th><th>Health</th></tr>
+    </thead>
+    <tbody>
+      {% for r in runs %}
+      <tr>
+        <td>{{ r.id }}</td>
+        <td class="st-{{ r.status }}">{{ r.status }}</td>
+        <td>{{ r.current_stage }}</td>
+        <td>${{ "%.2f"|format(r.cost_usd or 0) }}</td>
+        <td>{{ r.started_at }}</td>
+        <td>
+          {% for h in (r.source_health or []) %}
+          <span class="pill {% if h.ok %}ok{% else %}bad{% endif %}">{{ h.source }} {{ h.count }}</span>
+          {% endfor %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

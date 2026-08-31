@@ -1,0 +1,23 @@
+<article class="q" data-id="{{ q.id }}">
+  <p class="q-text">{{ q.text }}</p>
+  <div class="q-meta">
+    <span>{{ q.lens }}</span>
+    <span>{{ (q.verticals or []) | join(" × ") }}</span>
+    <span class="cov cov-{{ q.coverage }}">coverage {{ q.coverage }}</span>
+    <span>{{ q.decay_class }}</span>
+    {% if q.rank %}<span>rank {{ q.rank }}</span>{% endif %}
+  </div>
+  {% if q.context %}
+  <p class="q-ctx">{{ q.context }}</p>
+  {% endif %}
+  <div class="q-actions">
+    <div class="stars" data-qid="{{ q.id }}" data-stars="{{ ratings.get(q.id, 0) }}">
+      {% for n in range(1, 6) %}
+      <button type="button" data-star="{{ n }}" class="{% if ratings.get(q.id, 0) >= n %}on{% endif %}" aria-label="{{ n }} stars">★</button>
+      {% endfor %}
+    </div>
+    <button type="button" class="text-btn promote" data-qid="{{ q.id }}" {% if q.promoted %}disabled{% endif %}>
+      {% if q.promoted %}Promoted{% else %}Promote to ideation{% endif %}
+    </button>
+  </div>
+</article>

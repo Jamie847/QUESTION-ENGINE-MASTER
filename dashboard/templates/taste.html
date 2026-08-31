@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Taste — Question Engine{% endblock %}
+{% block body %}
+<section class="lede">
+  <p class="kicker">Taste profile</p>
+  <h1>What the curator thinks you want.</h1>
+  <p>{{ profile.notes }}</p>
+  <p class="hint">Seeded exemplars stay until a weekly compressor rotates them against your ratings. Do not flatten this into a slogan.</p>
+</section>
+
+{% if lens_avgs %}
+<section>
+  <h2>Rated lenses</h2>
+  <ul class="stats">
+    {% for lens, avg, n in lens_avgs %}
+    <li><strong>{{ lens }}</strong> {{ "%.1f"|format(avg) }}★ <span class="muted">({{ n }})</span></li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+<section class="split">
+  <div>
+    <h2>Keep exemplars</h2>
+    <ul class="ex keep">
+      {% for ex in profile.keep_exemplars %}
+      <li>
+        <span class="stars-static">{{ "★" * ex.stars }}</span>
+        <p>{{ ex.question }}</p>
+        <em>{{ ex.why }}</em>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  <div>
+    <h2>Kill exemplars</h2>
+    <ul class="ex kill">
+      {% for ex in profile.kill_exemplars %}
+      <li>
+        <span class="stars-static">{{ "★" * ex.stars }}</span>
+        <p>{{ ex.question }}</p>
+        <em>{{ ex.why }}</em>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+</section>
+
+<section>
+  <h2>Your ratings</h2>
+  {% if not rated %}
+  <p class="muted">No stars yet. Rate today’s questions — that is the signal, even after the fact.</p>
+  {% endif %}
+  <ul class="kill-list">
+    {% for q, stars in rated %}
+    <li>
+      <span class="stars-static">{{ "★" * stars }}</span>
+      {{ q.text }}
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endblock %}

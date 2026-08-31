@@ -1,0 +1,146 @@
+# Phase 1 thinner swarm: three verticals. Add rows here later; scouts
+# are config-driven and do not need new Python for a new vertical.
+verticals:
+  - id: ai
+    name: AI
+    enabled: true
+    search_queries:
+      - "artificial intelligence breakthrough"
+      - "foundation model regulation"
+      - "AI agents enterprise"
+      - "open source LLM"
+    reddit_subs:
+      - MachineLearning
+      - LocalLLaMA
+      - OpenAI
+      - artificial
+    hn_keywords:
+      - AI
+      - LLM
+      - GPT
+      - Claude
+      - model
+      - agent
+      - transformer
+      - inference
+      - GPU
+      - alignment
+    keywords:
+      - ai
+      - llm
+      - gpt
+      - claude
+      - anthropic
+      - openai
+      - "foundation model"
+      - agent
+      - neural
+      - diffusion
+      - gpu
+      - cuda
+      - transformer
+      - inference
+      - copilot
+      - "machine learning"
+      - "deep learning"
+      - chatbot
+      - "computer vision"
+      - "reinforcement learning"
+
+  - id: health
+    name: Health
+    enabled: true
+    search_queries:
+      - "FDA approval drug"
+      - "GLP-1 shortage"
+      - "clinical trial results"
+      - "hospital staffing crisis"
+    reddit_subs:
+      - medicine
+      - healthcare
+      - publichealth
+      - longevity
+    hn_keywords:
+      - FDA
+      - biotech
+      - CRISPR
+      - vaccine
+      - cancer
+      - longevity
+      - Alzheimer
+      - GLP
+    keywords:
+      - fda
+      - drug
+      - vaccine
+      - hospital
+      - medicare
+      - medicaid
+      - cancer
+      - glp-1
+      - ozempic
+      - wegovy
+      - clinical
+      - trial
+      - who
+      - cdc
+      - dementia
+      - alzheimer
+      - fertility
+      - ivf
+      - mental health
+      - obesity
+      - biotech
+      - nih
+      - patient
+      - physician
+      - nursing
+      - pandemic
+      - longevity
+
+  - id: business
+    name: Business/Finance
+    enabled: true
+    search_queries:
+      - "Federal Reserve interest rates"
+      - "startup funding winter"
+      - "SEC enforcement"
+      - "supply chain tariffs"
+    reddit_subs:
+      - economics
+      - business
+      - finance
+      - startups
+    hn_keywords:
+      - Fed
+      - IPO
+      - layoff
+      - funding
+      - bank
+      - tariff
+      - inflation
+      - earnings
+    keywords:
+      - fed
+      - "interest rate"
+      - inflation
+      - sec
+      - ipo
+      - layoff
+      - merger
+      - acquisition
+      - "private equity"
+      - tariff
+      - earnings
+      - startup
+      - funding
+      - venture
+      - bank
+      - recession
+      - nasdaq
+      - treasury
+      - "hedge fund"
+      - valuation
+      - "supply chain"
+      - antitrust
+      - "stock buyback"

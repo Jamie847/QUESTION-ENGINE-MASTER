@@ -1,0 +1,91 @@
+# Cold-start taste. These are not the user's ratings — they are a
+# seeded opinion so week one is not generic. The curator uses the
+# keep/kill exemplars as few-shot (and the heuristic fallback uses
+# them as similarity anchors). Replace or rate against these once
+# the dashboard is live. A weekly taste-profile compressor will
+# rotate exemplars later; do not flatten this file into a slogan.
+
+keeps:
+  - stars: 5
+    question: >
+      If ambient voice agents become the default interface for people
+      over 75, who owns the consent trail when the listener has
+      fluctuating capacity?
+    why: Named population, mechanism (consent + capacity), not "AI for seniors."
+
+  - stars: 5
+    question: >
+      Why is every fertility-clinic SaaS building for the IVF coordinator
+      while the cash-pay diagnostics labs that feed them still fax
+      results?
+    why: Specific workflow, ignored actor, boring infrastructure.
+
+  - stars: 5
+    question: >
+      If GLP-1 adherence collapses after 18 months for the cash-pay
+      cohort, which downstream businesses are priced as if the
+      patients stay forever?
+    why: Second-order, named cohort, a falsifiable bet.
+
+  - stars: 4
+    question: >
+      What happens to medical-malpractice discovery when the
+      attending's "note" was drafted by a model the hospital
+      will not produce in court?
+    why: Legal/operational wedge hiding inside a hype trend.
+
+  - stars: 4
+    question: >
+      Who is writing the playbook for towns that lose their only
+      hospital but gain a retail clinic that cannot take Medicaid?
+    why: Underserved geography, institution change, not a startup pitch.
+
+  - stars: 4
+    question: >
+      If open-weight models make "an analyst on every desk" free,
+      which mid-market firms are still paying for the ritual of
+      the quarterly strategy deck?
+    why: Arbitrage between capability and buying habit.
+
+  - stars: 5
+    question: >
+      When a foundation model lab's safety team and its enterprise
+      sales team disagree about a vertical, which document actually
+      ships to the hospital CIO?
+    why: Internal conflict as a signal; named buyer.
+
+  - stars: 4
+    question: >
+      Is the real bottleneck in AI-for-nursing-homes the model, the
+      wifi, or the fact that night-shift aides cannot be on camera
+      for liability reasons?
+    why: Kills the obvious tech answer; names the constraint.
+
+kills:
+  - stars: 1
+    question: What are the implications of AI in healthcare?
+    why: No population, no mechanism, no time. The platonic bad question.
+
+  - stars: 1
+    question: How will interest rates affect startups?
+    why: Exam-question shape. A smart generalist writes this in 30 seconds.
+
+  - stars: 1
+    question: What opportunities exist at the intersection of AI and finance?
+    why: Intersection named, not found. Zero surprise.
+
+  - stars: 2
+    question: Will LLMs replace doctors?
+    why: Binary hype. No mechanism of partial replacement, no specialty.
+
+  - stars: 1
+    question: How can nonprofits use artificial intelligence?
+    why: Audience-shaped, content-shaped, not curiosity-shaped.
+
+  - stars: 2
+    question: What are the ethical concerns around AI agents?
+    why: Seminar title. Ethics without a scene is a kill.
+
+  - stars: 1
+    question: Is this the year of the AI agent?
+    why: Calendar copy. Not a question that generates work.

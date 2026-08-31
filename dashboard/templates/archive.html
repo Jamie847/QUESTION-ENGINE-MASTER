@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Archive — Question Engine{% endblock %}
+{% block body %}
+<section class="lede">
+  <p class="kicker">Archive</p>
+  <h1>Every question the curator let live.</h1>
+</section>
+
+<form class="filters" method="get" action="/archive">
+  <input type="search" name="q" value="{{ q }}" placeholder="Search questions">
+  <select name="lens">
+    <option value="">All lenses</option>
+    {% for ln in lenses %}
+    <option value="{{ ln.id }}" {% if lens == ln.id %}selected{% endif %}>{{ ln.name }}</option>
+    {% endfor %}
+  </select>
+  <select name="vertical">
+    <option value="">All verticals</option>
+    {% for v in verticals %}
+    <option value="{{ v.id }}" {% if vertical == v.id %}selected{% endif %}>{{ v.name }}</option>
+    {% endfor %}
+  </select>
+  <select name="coverage">
+    <option value="">Any coverage</option>
+    {% for c in ["none", "thin", "crowded", "unknown"] %}
+    <option value="{{ c }}" {% if coverage == c %}selected{% endif %}>{{ c }}</option>
+    {% endfor %}
+  </select>
+  <select name="rating">
+    <option value="">Any rating</option>
+    {% for n in range(1, 6) %}
+    <option value="{{ n }}" {% if rating == n|string %}selected{% endif %}>{{ n }}★</option>
+    {% endfor %}
+  </select>
+  <button type="submit">Filter</button>
+</form>
+
+{% if not questions %}
+<p class="empty-inline">Nothing matches. Run the swarm, or loosen the filters.</p>
+{% endif %}
+
+{% for q in questions %}
+  {% include "partials/question.html" %}
+{% endfor %}
+
+<section class="digest-index">
+  <h2>Digests</h2>
+  {% if not digests %}
+  <p class="muted">No days on file.</p>
+  {% endif %}
+  <ul>
+    {% for d in digests %}
+    <li>
+      <a href="/digest/{{ d.date }}">{{ d.date }}</a>
+      — {{ d.curated_count }} questions
+      <a class="dl" href="/digest/{{ d.date }}.md">.md</a>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endblock %}

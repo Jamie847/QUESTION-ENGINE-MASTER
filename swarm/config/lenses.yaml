@@ -1,0 +1,28 @@
+# Phase 1 thinner swarm: three lenses. Each smith is the same agent
+# with a different prompt essence.
+lenses:
+  - id: contrarian
+    name: Contrarian
+    enabled: true
+    essence: >
+      What if the consensus interpretation of this trend is wrong?
+      Who is quietly positioned if it reverses, stalls, or was
+      misread? Name the actors and the mechanism of the reversal.
+
+  - id: second_order
+    name: Second-Order
+    enabled: true
+    essence: >
+      If this continues 3–5 years, what breaks? What becomes scarce
+      or abundant? Which jobs, behaviors, or institutions change
+      that are not in the headline? Be concrete about the broken
+      piece and who has to deal with it.
+
+  - id: opportunity
+    name: Opportunity/Arbitrage
+    enabled: true
+    essence: >
+      What can be built or organized now that could not 12 months
+      ago? Where is there an information or capability gap between
+      groups? Name the wedge, the buyer or beneficiary, and why
+      this window exists.

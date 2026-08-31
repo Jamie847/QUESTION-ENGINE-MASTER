@@ -1,0 +1,161 @@
+from __future__ import annotations
+
+from datetime import date
+
+from swarm.models import (
+    Brief,
+    DigestDoc,
+    Intersection,
+    Question,
+    QuestionStatus,
+    RunStatus,
+    SourceHealth,
+)
+
+
+def render_digest(
+    *,
+    day: date,
+    briefs: list[Brief],
+    intersections: list[Intersection],
+    questions: list[Question],
+    health: list[SourceHealth],
+    warnings: list[str],
+    degraded: bool,
+    cost_usd: float,
+) -> DigestDoc:
+    curated = sorted(
+        [q for q in questions if q.status == QuestionStatus.curated],
+        key=lambda q: q.rank or 99,
+    )
+    killed = [q for q in questions if q.status == QuestionStatus.killed]
+    accepted = [i for i in intersections if i.accepted]
+    rejected = [i for i in intersections if not i.accepted]
+    top = curated[:5]
+    lines: list[str] = [
+        f"# Question Engine — {day.isoformat()}",
+        "",
+    ]
+    if degraded:
+        lines += [
+            "> Degraded run. One or more sources or model calls failed; "
+            "the digest is still complete from what survived.",
+            "",
+        ]
+    lines += ["## Top questions", ""]
+    if not top:
+        lines += ["_No questions cleared the curator._", ""]
+    for i, q in enumerate(top, start=1):
+        lines += _question_block(i, q, briefs, intersections)
+
+    lines += ["## Intersections of the day", ""]
+    if not accepted:
+        lines.append("_Cross-pollinator accepted nothing. See rejects below._")
+        lines.append("")
+    for inter in accepted:
+        cov = inter.coverage.value
+        lines.append(
+            f"- **{' × '.join(inter.verticals)}** · surprise {inter.surprise:.2f} · "
+            f"coverage **{cov}** — {inter.thesis}"
+        )
+        if inter.coverage_notes:
+            lines.append(f"  - coverage note: {inter.coverage_notes}")
+    lines.append("")
+
+    lines += ["## Full question bank", ""]
+    by_v: dict[str, list[Question]] = {}
+    for q in curated:
+        key = " × ".join(q.verticals) if q.verticals else "uncategorized"
+        by_v.setdefault(key, []).append(q)
+    for key, qs in sorted(by_v.items()):
+        lines.append(f"### {key}")
+        for q in qs:
+            flag = f" · coverage {q.coverage.value}" if q.coverage.value != "unknown" else ""
+            lines.append(f"- {q.text} _{q.lens}{flag}_")
+        lines.append("")
+
+    lines += ["## Cross-pollinator passed over", ""]
+    if not rejected:
+        lines.append("_No rejected intersections were logged._")
+        lines.append("")
+    for inter in rejected:
+        reason = inter.reject_reason or "no reason given"
+        lines.append(
+            f"- **{' × '.join(inter.verticals)}** — {inter.thesis}  "
+            f"_rejected: {reason}_"
+        )
+    lines.append("")
+
+    lines += ["## Curator's kill floor (sample)", ""]
+    sample = [q for q in killed if q.kill_reason][:6]
+    if not sample:
+        lines.append("_Nothing killed with a recorded reason._")
+        lines.append("")
+    for q in sample:
+        lines.append(f"- {q.text}  _killed: {q.kill_reason}_")
+    lines.append("")
+
+    lines += ["## Source health", ""]
+    for h in health:
+        mark = "ok" if h.ok else "DOWN"
+        extra = f" — {h.error}" if h.error else ""
+        skip = " (skipped)" if h.error == "skipped" else ""
+        lines.append(f"- {h.source}: {mark}, {h.count} signals, {h.elapsed_ms}ms{skip}{extra}")
+    lines.append("")
+    if warnings:
+        lines += ["## Warnings", ""]
+        for w in warnings:
+            lines.append(f"- {w}")
+        lines.append("")
+    lines.append(f"_Run cost ≈ ${cost_usd:.2f}. Coverage is shown, never used as promotion._")
+    lines.append("")
+
+    markdown = "\n".join(lines)
+    return DigestDoc(
+        date=day.isoformat(),
+        title=f"Question Engine — {day.isoformat()}",
+        markdown=markdown,
+        top_ids=[q.id for q in top],
+        curated_count=len(curated),
+        killed_count=len(killed),
+        rejected_intersection_count=len(rejected),
+        degraded=degraded,
+        warnings=warnings,
+    )
+
+
+def _question_block(
+    n: int,
+    q: Question,
+    briefs: list[Brief],
+    intersections: list[Intersection],
+) -> list[str]:
+    inter = next((i for i in intersections if i.id == q.intersection_id), None)
+    related = [b for b in briefs if b.id in (q.brief_ids or [])][:2]
+    context = q.context
+    if not context and related:
+        context = related[0].what_is_happening
+    if not context and inter:
+        context = inter.thesis
+    sources = []
+    for b in related:
+        sources.extend(b.sources)
+    src_line = " ".join(f"[source]({u})" for u in sources[:3] if u)
+    lines = [
+        f"### {n}. {q.text}",
+        f"- Lens: {q.lens} · Verticals: {' × '.join(q.verticals) or '—'} · "
+        f"Coverage: **{q.coverage.value}** · Decay: {q.decay_class.value}",
+        f"- Context: {context or '—'}",
+    ]
+    if src_line:
+        lines.append(f"- Sources: {src_line}")
+    lines.append("")
+    return lines
+
+
+def run_status_from(*, degraded: bool, curated_count: int) -> RunStatus:
+    if curated_count == 0:
+        return RunStatus.failed
+    if degraded:
+        return RunStatus.degraded
+    return RunStatus.completed

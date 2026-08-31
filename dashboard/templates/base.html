@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Question Engine{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,620;1,9..144,500&family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="shell">
+    <header class="mast">
+      <div class="mast-mark">
+        <a href="/" class="wordmark">Question Engine</a>
+        <span class="edition">Daily interrogation, not a recap</span>
+      </div>
+      <nav>
+        <a href="/" class="{% if page == 'today' %}on{% endif %}">Today</a>
+        <a href="/archive" class="{% if page == 'archive' %}on{% endif %}">Archive</a>
+        <a href="/taste" class="{% if page == 'taste' %}on{% endif %}">Taste</a>
+        <a href="/controls" class="{% if page == 'controls' %}on{% endif %}">Controls</a>
+      </nav>
+    </header>
+
+    {% if active_run %}
+    <div class="banner run" data-poll="1">
+      Swarm is running — stage <strong>{{ active_run.current_stage or "starting" }}</strong>.
+      This page will refresh when the digest lands.
+    </div>
+    {% endif %}
+
+    <main>
+      {% block body %}{% endblock %}
+    </main>
+
+    <footer class="colophon">
+      Postgres-canonical. Coverage is shown, never used as promotion.
+      Rejected intersections are logged. Autonomous — no morning gate.
+    </footer>
+  </div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

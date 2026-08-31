@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}{{ digest.date }} — Question Engine{% endblock %}
+{% block body %}
+<section class="lede">
+  <p class="kicker">{{ digest.date }}</p>
+  <h1>{{ digest.title }}</h1>
+  <p class="meta-row">
+    <a class="dl" href="/digest/{{ digest.date }}.md">Download .md</a>
+    · <a href="/">Back to today</a>
+  </p>
+</section>
+<article class="md">
+  <pre>{{ digest.markdown }}</pre>
+</article>
+{% endblock %}

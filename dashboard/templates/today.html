@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Today — Question Engine{% endblock %}
+{% block body %}
+
+{% if not digest %}
+<section class="empty">
+  <p class="kicker">No digest yet</p>
+  <h1>The swarm has not written today.</h1>
+  <p>Trigger a run from <a href="/controls">Controls</a>. Without an Anthropic key it still produces a grounded digest from live sources (or a seeded fallback if they are dark).</p>
+</section>
+{% else %}
+
+<section class="lede">
+  <p class="kicker">{{ digest.date }}{% if digest.degraded %} · degraded{% endif %}</p>
+  <h1>{{ digest.title }}</h1>
+  <p class="meta-row">
+    {{ digest.curated_count }} curated
+    · {{ digest.killed_count }} killed
+    · {{ digest.rejected_intersection_count }} intersections passed over
+    <a class="dl" href="/digest/{{ digest.date }}.md">Download .md</a>
+  </p>
+  {% if digest.warnings %}
+  <ul class="warns">
+    {% for w in digest.warnings %}<li>{{ w }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+</section>
+
+<section>
+  <h2>Top questions</h2>
+  {% if not top %}
+  <p class="muted">The curator kept nothing. That is a signal — check the kill floor and the source health.</p>
+  {% endif %}
+  {% for q in top %}
+    {% include "partials/question.html" %}
+  {% endfor %}
+</section>
+
+<section>
+  <h2>Intersections of the day</h2>
+  {% if not accepted %}
+  <p class="muted">Nothing accepted. The interesting work may be in what was passed over.</p>
+  {% endif %}
+  <ul class="inter-list">
+    {% for i in accepted %}
+    <li>
+      <span class="verts">{{ i.verticals | join(" × ") }}</span>
+      <span class="cov cov-{{ i.coverage }}">coverage {{ i.coverage }}</span>
+      <span class="surprise">surprise {{ "%.2f"|format(i.surprise) }}</span>
+      <p>{{ i.thesis }}</p>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+
+<section>
+  <h2>Question bank</h2>
+  {% if not bank %}
+  <p class="muted">The top five is the whole bank today.</p>
+  {% endif %}
+  {% for q in bank %}
+    {% include "partials/question.html" %}
+  {% endfor %}
+</section>
+
+<section>
+  <h2>Cross-pollinator passed over</h2>
+  <p class="hint">If the interesting pairings are dying here, the curator’s kill floor will not show you.</p>
+  {% if not rejected %}
+  <p class="muted">No rejects were logged — that is a bug, not a compliment.</p>
+  {% endif %}
+  <ul class="kill-list">
+    {% for i in rejected %}
+    <li>
+      <span class="verts">{{ i.verticals | join(" × ") }}</span>
+      {{ i.thesis }}
+      <em>rejected: {{ i.reject_reason or "no reason" }}</em>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+
+<section>
+  <h2>Curator’s kill floor</h2>
+  {% if not killed %}
+  <p class="muted">No killed questions with reasons.</p>
+  {% endif %}
+  <ul class="kill-list">
+    {% for q in killed %}
+    <li>
+      {{ q.text }}
+      <em>killed: {{ q.kill_reason }}</em>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+
+{% endif %}
+{% endblock %}
