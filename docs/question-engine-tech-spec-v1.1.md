@@ -7,6 +7,32 @@ Owner: Jamie · Built in this repo · Hosted on: Render.com · Output: Daily mar
 Standing design for Phase 1 as of 2026-09-01. Where a section is marked **SUPERSEDED**,
 the old text is the record of a prior design; the superseding block is what to build.
 
+### Document identity — two copies (CW Finding 001, 2026-09-01)
+
+This file was **authored in the implementer workspace on 2026-09-01** as a standing
+write-up of Phase 1 as built, plus later rulings. It is **not** the
+`question-engine-tech-spec-v1.1.md` dated 2026-08-31 in the Claude project
+knowledge. That project copy is a different document. CW read the project copy
+in full; this file is what the repo builds against.
+
+Consequences already confirmed:
+
+- The project copy specifies `agent_calls` in §7 (table list, observability
+  sentence, prompt version stamp) and in **§10 Phase 1**. This file omitted
+  those lines when it was written. That is a condensation gap, not proof the
+  spec never required the table.
+- The project copy still carries unsuperseded `embedding: list[float]` (§3.3)
+  and cosine ~0.92 (§3.4). This file supersedes both in place. Rulings have
+  been landing in only one of the two documents.
+- The project copy types `source_briefs` / `brief_ids` as `list[int]` and
+  `intersection_id` as `int | None`. The running code uses `str` for
+  `Question.id`, `Brief.id`, and `Intersection.id`. This file follows the code.
+
+Until the project copy is replaced or superseded to match this file (or this
+file is replaced by the project copy plus the rulings), **"the spec says X" is
+ambiguous**. This file is canonical for the repo and the build. The project
+copy is the prior design record.
+
 ---
 
 ## 1. Concept
@@ -101,6 +127,12 @@ question past the curator on its own.
 `status` (`raw` / `duplicate` / `killed` / `curated`), `rank`, `kill_reason`,
 `duplicate_of`, `brief_ids`, `intersection_id`, `context`. No embedding field.
 
+**IDs — SUPERSEDED IN PLACE 2026-09-01 (CW 001, incidental).** The project copy's
+§3.2 / §3.3 type `source_briefs` / `brief_ids` as `list[int]` and
+`intersection_id` as `int | None`. The running code uses `str` for `Question.id`,
+`Brief.id`, and `Intersection.id`. Provenance and §12 follow the code. The
+project copy is stale on those types.
+
 `Signal` is `source`, `title`, `url`, `snippet`, `score`, `vertical_hints`, `raw`.
 Curator output is the same `Question` objects with `status` / `rank` / `kill_reason`.
 Digest JSON is `DigestDoc`.
@@ -187,22 +219,41 @@ dashboard token. `pgvector_installed` is `false`. Taste shows lexical mark count
 the same caveat as the footer — a low number must not read as "working." A Pipeline
 page is not Phase 1; it is the first slice of §12, after the §12 greenlight conditions.
 
-## 7. Stack — SUPERSEDED IN PLACE 2026-09-01 (§12, agent_calls)
+## 7. Stack — SUPERSEDED IN PLACE 2026-09-01 (§12, agent_calls) — amended same day (CW 001)
 
-> **Was (observability design, day one):** a bad question traces back through
-> smith → intersection → scout brief via an `agent_calls` row carrying stage, model,
-> prompt version, tokens, cost, latency, and input/output JSON. That sentence lived in
-> the Phase-1 build prompt (`docs/CC-BUILD-PROMPT.md` §3). **It was never in this
-> file's table list, and the table does not exist.** That omission is the same class
-> of divergence as the pgvector line: the design said per-call observability; the
-> system checkpoints a *run* (`stages[]`, `current_stage`, `cost_usd`, `warnings`,
-> `source_health`) and does not persist model, prompt version, tokens, latency, or
-> I/O per call.
+> **Was (project copy v1.1, 2026-08-31 — four occurrences, verbatim as CW read them):**
+>
+> - §7 Tables — `runs, agent_calls, signals, briefs, intersections,
+>   intersection_rejections, questions, dedup_drops, curator_decisions, ratings,
+>   taste_profiles, digests, resurrection_links, projects, source_health`
+> - §7 Observability — *"one runs row per execution; one agent_calls row per LLM
+>   call (stage, model, prompt version, tokens, cost, latency, input/output JSON).
+>   When a bad question ships you can trace scout brief → intersection → smith
+>   draft → curator reason."*
+> - §7 repo layout — prompts are versioned `.md`, one per agent; *"version stamped
+>   into agent_calls"*
+> - §10 Phase 1 — *"…run lock, budget cap, agent_calls logging, email delivery of
+>   Top 5."*
+>
+> That observability sentence is the spec's. The voided build prompt quoted it; it
+> did not originate it. **This repo file omitted those four lines when it was
+> condensed on 2026-09-01.** The first supersession of this section wrongly treated
+> that omission as "the spec never named the table." That manufactured an absence.
+> The table still does not exist in the build. Against the project copy, that is a
+> **Phase-1 gap**, not an unspecified feature.
+>
+> What the system actually persists per run: `stages[]`, `current_stage`,
+> `cost_usd`, `warnings`, `source_health`. Not model, prompt version, tokens,
+> latency, or I/O per call.
 
-**Now — disposition (a):** add `agent_calls` **with the catalog**, not as a silent
-Phase-1 retrofit and not by promoting checkpoints to fill the role. Ideator and
-spec-writer each produce an object the Operator acts on; those are the calls that
-must be traceable. Checkpoints remain resume machinery. See §12.4.
+**Now — disposition (a), justification amended:** add `agent_calls` **with the
+catalog**. The requirement was specified for Phase 1. The build does not have it.
+We are deferring an unimplemented Phase-1 requirement to the catalog ship — we are
+not recording that it was never specified. Ideator and spec-writer each produce an
+object the Operator acts on; those are the calls that must be traceable, and they
+are the natural moment to add the table. Swarm stages may start writing the same
+table then. Checkpoints remain resume machinery. See §12.4. Do not promote
+checkpoints to fill this role.
 
 Python 3.12 · FastAPI + Jinja2 · SQLAlchemy · SQLite locally / Render Postgres ·
 Anthropic API only. Tables that exist today: `runs`, `signals`, `briefs`,
@@ -226,9 +277,16 @@ Fable is 2× Opus. Phase-1 $0.50–1.50/day estimates written against an unnamed
 `RUN_BUDGET_USD=5.00` will tell the truth. Exceeding the budget skips optional
 stages; it does not fail the run.
 
-## 10. Phase 1 milestone
+## 10. Phase 1 milestone — SUPERSEDED IN PLACE 2026-09-01 (CW 001)
 
-A digest Jamie wants to open on day 3. Not a second scaffold. Not Voyage.
+> **Was (project copy §10):** Phase 1 includes *"run lock, budget cap, agent_calls
+> logging, email delivery of Top 5."* `agent_calls` logging was a Phase-1 item,
+> not a later phase.
+
+**Now:** the milestone is still a digest Jamie wants to open on day 3. Run lock
+and budget cap exist. Email does not. `agent_calls` logging does not — it is a
+Phase-1 gap deferred to the catalog ship (§7 / §12.4), not dropped from the
+record. Not a second scaffold. Not Voyage.
 
 ## 11. Explicitly not yet
 
@@ -377,8 +435,10 @@ accepts. No status, no card.
 
 ### 12.4 `agent_calls` — disposition (a)
 
-The table does not exist. Stage checkpoints are not a substitute (see §7). Add
-`agent_calls` **with this catalog**. Each ideator call and each spec-writer call
+The project-copy spec required this table in Phase 1. The table does not exist.
+That is a Phase-1 gap. Stage checkpoints are not a substitute (see §7). Add
+`agent_calls` **with this catalog** — a deferral of an unimplemented requirement,
+not a claim it was unspecified. Each ideator call and each spec-writer call
 writes a row: stage, model, prompt version, tokens, cost, latency, input/output
 JSON, and the `idea_id` / `spec_id` acted on. Swarm stages may start writing the
 same table when the catalog ships; until then, do not pretend per-call
