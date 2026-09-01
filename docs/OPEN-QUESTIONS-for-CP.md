@@ -22,12 +22,22 @@ for a 256 MB cron; cutting the stage leaves no duplicate metric.
   the last 45 days, threshold `DEDUP_THRESHOLD` (default 0.64).
 - `Question` has **no** `embedding` field. Adding one later is a migration, not a
   rewrite of history we never stored as vectors.
-- Nightly duplicate rate is the count of `status=duplicate` on that run. Footer can
-  name it. We did not invent a cosine metric we cannot compute.
+- Nightly duplicate rate is the count of `status=duplicate` on that run. Footer,
+  Today, and Taste name it **and** say it is token overlap only.
 - §11's "embeddings-as-a-service" stays deferred. Do not `CREATE EXTENSION vector`.
+- Spec §3.3 / §3.4 superseded in place: `docs/question-engine-tech-spec-v1.1.md`.
 
-This is cheap now and reversible: if three keyed weeks show a real near-duplicate
-problem lexical miss, *then* pick Voyage and add a nullable vector column.
+**Re-trigger, amended 2026-09-01 (CW was right; quiet weeks cannot fire).**
+Dedup does not catch paraphrase. A low lexical rate is not evidence that it does.
+The original "three keyed weeks show a miss" is void.
+
+What can fire:
+
+1. Jamie flags **three** near-miss pairs on the daily digest as paraphrase, or
+2. `python scripts/measure_paraphrase_leak.py` after three keyed weeks shows a leak
+   that makes the digest feel repetitive.
+
+Then — and only then — a nullable vector column. See `docs/CP-RULING-dedup.md`.
 
 ## Q2 — `Signal` is defined.
 
@@ -81,3 +91,5 @@ Do not resurrect `basic-256mb` or `envVars: [same as above]`.
   bundled `data/taste_seed.yaml` is a stand-in so the curator has *a* gate, and it
   is labeled as such.
 - Do not add Voyage, sentence-transformers, or pgvector.
+- Do not build from `docs/CC-BUILD-PROMPT.md`. It is void. The inverted
+  `pgvector_installed: true` check in its §1.3 would fail a healthy system.

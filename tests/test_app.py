@@ -16,3 +16,7 @@ def test_health_and_empty_today():
     assert home.status_code == 200
     assert "Question Engine" in home.text
     assert "No digest yet" in home.text or "Top questions" in home.text
+    taste = client.get("/taste")
+    assert taste.status_code == 200
+    assert "does not catch paraphrase" in taste.text
+    assert "lexical-duplicate" in taste.text.lower() or "Lexical duplicate" in taste.text

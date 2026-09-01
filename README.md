@@ -4,7 +4,7 @@ A daily agentic swarm that **interrogates** emerging trends instead of summarizi
 
 Output is a structured digest in **Postgres** (SQLite locally) plus an interactive dashboard. Download any day as markdown for project knowledge. There are no GitHub commits from the cron — Render's filesystem is ephemeral, and the deploy repo is the wrong archive.
 
-Phase 1 on purpose: thinner swarm, Pydantic contracts, checkpoints, a run lock, a hard dollar budget, degraded-run tolerance, semantic dedup, a seeded taste file, and rejected intersections logged next to the curator's kill floor.
+Phase 1 on purpose: thinner swarm, Pydantic contracts, checkpoints, a run lock, a hard dollar budget, degraded-run tolerance, **lexical** dedup (no Voyage, no pgvector), a seeded taste file, rejected intersections next to the curator's kill floor, and a near-miss sample so paraphrase can be flagged by a person.
 
 ## Run locally
 
@@ -21,7 +21,7 @@ Open `http://127.0.0.1:43417`. The swarm runs without keys (Hacker News + Wikipe
 
 - `ANTHROPIC_MODEL` (default `claude-sonnet-5`) — scouts and smiths
 - `JUDGMENT_MODEL` (default `claude-fable-5`) — cross-pollinator and curator
-- Dedup is **lexical** (no Voyage, no pgvector). See `docs/OPEN-QUESTIONS-for-CP.md` Q1.
+- Dedup is **lexical** (no Voyage, no pgvector). `/healthz` reports `pgvector_installed: false` on purpose. See `docs/CP-RULING-dedup.md`.
 
 `DASHBOARD_TOKEN` (or `ACCESS_TOKEN`) locks the dashboard. Leave it empty locally.
 
@@ -31,7 +31,7 @@ Open `http://127.0.0.1:43417`. The swarm runs without keys (Hacker News + Wikipe
 2. **Scout** — one pass per enabled vertical → structured briefs.
 3. **Cross-pollinator** — intersections with surprise, plausibility, and a **coverage** score (`none` / `thin` / `crowded` / `unknown`). Coverage is visible. It cannot promote a question. Rejected pairings are persisted.
 4. **Smiths** — one lens each.
-5. **Dedup** — near-duplicates against the batch and the last 45 days.
+5. **Dedup** — lexical (content-token Jaccard) against the batch and the last 45 days. Does not catch paraphrase. The digest samples adjacent-day survivors so a person can flag a miss.
 6. **Curator** — taste seed (later: weekly compressed profile + rotating exemplars).
 7. **Archivist** — markdown digest written to the database.
 
@@ -41,7 +41,7 @@ Open `http://127.0.0.1:43417`. The swarm runs without keys (Hacker News + Wikipe
 
 - **Today** — digest, 1–5★ ratings, promote-to-ideation, coverage flags, rejects, kill floor.
 - **Archive** — search/filter the question bank; per-day `.md` download.
-- **Taste** — seeded keep/kill exemplars and your ratings.
+- **Taste** — seeded keep/kill exemplars, your ratings, and a lexical-duplicate count that is labeled as token overlap only.
 - **Controls** — manual run, source health, verticals/lenses.
 
 ## Deploy on Render
@@ -76,6 +76,7 @@ Replace `data/taste_seed.yaml` with your own voice, or drop `taste/seed.yaml` (p
 
 ```bash
 pytest -q
+python scripts/measure_paraphrase_leak.py   # gray-zone pairs; official after 21 digest days
 ```
 
 ## What is intentionally not here yet

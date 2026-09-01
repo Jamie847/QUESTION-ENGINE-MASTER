@@ -238,6 +238,20 @@ h2 {
 }
 .pill.bad { background: #ead9d4; }
 
+.near-miss-list { list-style: decimal; padding-left: 1.25rem; }
+.near-miss-list li {
+  padding: 0.85rem 0;
+  border-bottom: 1px solid var(--rule);
+}
+.near-miss-list p { margin: 0.35rem 0; }
+.near-miss-meta {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
 .md pre {
   white-space: pre-wrap;
   font-family: "Source Serif 4", serif;

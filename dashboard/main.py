@@ -14,7 +14,9 @@ from sqlalchemy import func, select
 
 from swarm.config import lenses, verticals
 from swarm.db import init_db, ping_db, session_scope
+from swarm.dedup import sample_near_miss_pairs
 from swarm.lock import current_lock
+from swarm.models import Coverage, DecayClass, Question, QuestionStatus
 from swarm.orm import DigestRow, IntersectionRow, QuestionRow, RatingRow, RunRow
 from swarm.settings import get_settings
 from swarm.taste import load_seed_profile
@@ -99,6 +101,45 @@ def _active_run() -> RunRow | None:
         return row
 
 
+def _question_from_row(row: QuestionRow) -> Question:
+    return Question(
+        id=row.id,
+        text=row.text,
+        lens=row.lens,
+        verticals=list(row.verticals or []),
+        coverage=Coverage(row.coverage) if row.coverage else Coverage.unknown,
+        decay_class=DecayClass(row.decay_class) if row.decay_class else DecayClass.slow,
+        status=QuestionStatus(row.status),
+        rank=row.rank,
+        kill_reason=row.kill_reason or "",
+        duplicate_of=row.duplicate_of,
+        brief_ids=list(row.brief_ids or []),
+        intersection_id=row.intersection_id,
+        context=row.context or "",
+    )
+
+
+def _prior_day_curated(current_date: str | None) -> list[Question]:
+    if not current_date:
+        return []
+    with session_scope() as session:
+        prior = session.scalar(
+            select(DigestRow)
+            .where(DigestRow.date < current_date)
+            .order_by(DigestRow.date.desc())
+        )
+        if not prior:
+            return []
+        rows = list(
+            session.scalars(
+                select(QuestionRow)
+                .where(QuestionRow.run_id == prior.run_id)
+                .where(QuestionRow.status == "curated")
+            ).all()
+        )
+        return [_question_from_row(r) for r in rows]
+
+
 def _nav_ctx(request: Request, page: str) -> dict:
     return {
         "request": request,
@@ -146,11 +187,17 @@ def today(request: Request):
         key=lambda q: q.rank or 99,
     )
     killed = [q for q in questions if q.status == "killed"]
+    duplicates = [q for q in questions if q.status == "duplicate"]
     accepted = [i for i in intersections if i.accepted]
     rejected = [i for i in intersections if not i.accepted]
     top_ids = set(digest.top_ids or []) if digest else set()
     top = [q for q in curated if q.id in top_ids] or curated[:5]
     bank = [q for q in curated if q not in top]
+    prior_curated = _prior_day_curated(digest.date if digest else None)
+    near_miss = sample_near_miss_pairs(
+        [_question_from_row(q) for q in curated],
+        prior_curated,
+    )
     return templates.TemplateResponse(
         request,
         "today.html",
@@ -164,6 +211,10 @@ def today(request: Request):
             "accepted": accepted,
             "rejected": rejected,
             "ratings": ratings,
+            "duplicate_count": len(duplicates),
+            "question_count": len(questions),
+            "near_miss": near_miss,
+            "has_prior_day": bool(prior_curated),
         },
     )
 
@@ -241,6 +292,12 @@ def taste_page(request: Request):
             .join(RatingRow, RatingRow.question_id == QuestionRow.id)
             .group_by(QuestionRow.lens)
         ).all()
+        dup_n = session.scalar(
+            select(func.count()).where(QuestionRow.status == "duplicate")
+        ) or 0
+        curated_n = session.scalar(
+            select(func.count()).where(QuestionRow.status == "curated")
+        ) or 0
     return templates.TemplateResponse(
         request,
         "taste.html",
@@ -249,6 +306,8 @@ def taste_page(request: Request):
             "profile": profile,
             "rated": pairs,
             "lens_avgs": lens_avgs,
+            "lexical_duplicate_count": dup_n,
+            "curated_count": curated_n,
         },
     )
 

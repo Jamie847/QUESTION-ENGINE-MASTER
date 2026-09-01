@@ -146,6 +146,16 @@ class TasteProfile(BaseModel):
     notes: str = ""
 
 
+class NearMissPair(BaseModel):
+    """Two surviving questions from adjacent days. For a person to flag, not a score."""
+
+    today_text: str
+    prior_text: str
+    score: float
+    shared_verticals: list[str] = Field(default_factory=list)
+    share_kind: str = "none"
+
+
 class DigestDoc(BaseModel):
     date: str
     title: str
@@ -153,6 +163,8 @@ class DigestDoc(BaseModel):
     top_ids: list[str] = Field(default_factory=list)
     curated_count: int = 0
     killed_count: int = 0
+    duplicate_count: int = 0
     rejected_intersection_count: int = 0
     degraded: bool = False
     warnings: list[str] = Field(default_factory=list)
+    near_miss_pairs: list[NearMissPair] = Field(default_factory=list)

@@ -16,9 +16,11 @@
   <p class="meta-row">
     {{ digest.curated_count }} curated
     · {{ digest.killed_count }} killed
+    · {{ duplicate_count }} lexical duplicates
     · {{ digest.rejected_intersection_count }} intersections passed over
     <a class="dl" href="/digest/{{ digest.date }}.md">Download .md</a>
   </p>
+  <p class="hint">Lexical duplicate count is token overlap only. It does not catch paraphrase, and a low number is not evidence that dedup worked.</p>
   {% if digest.warnings %}
   <ul class="warns">
     {% for w in digest.warnings %}<li>{{ w }}</li>{% endfor %}
@@ -78,6 +80,28 @@
     </li>
     {% endfor %}
   </ul>
+</section>
+
+<section class="near-miss">
+  <h2>Near-miss review</h2>
+  <p class="hint">These pairs survived lexical dedup. Flag any that mean the same thing in different words — that flag is the re-trigger, not three quiet weeks.</p>
+  {% if not has_prior_day %}
+  <p class="muted">No prior digest. This section starts the next keyed day.</p>
+  {% elif not near_miss %}
+  <p class="muted">Prior digest has no surviving questions to pair.</p>
+  {% else %}
+  <ol class="near-miss-list">
+    {% for pair in near_miss %}
+    <li>
+      <p class="near-miss-meta">lexical overlap {{ "%.2f"|format(pair.score) }}
+        · {{ pair.shared_verticals | join(" × ") or "no shared vertical" }}</p>
+      <p><strong>Today.</strong> {{ pair.today_text }}</p>
+      <p><strong>Prior day.</strong> {{ pair.prior_text }}</p>
+      <p class="muted">Same question in different words? If yes, flag it.</p>
+    </li>
+    {% endfor %}
+  </ol>
+  {% endif %}
 </section>
 
 <section>

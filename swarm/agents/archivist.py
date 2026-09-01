@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 
+from swarm.dedup import sample_near_miss_pairs
 from swarm.models import (
     Brief,
     DigestDoc,
@@ -23,12 +24,15 @@ def render_digest(
     warnings: list[str],
     degraded: bool,
     cost_usd: float,
+    prior_questions: list[Question] | None = None,
 ) -> DigestDoc:
     curated = sorted(
         [q for q in questions if q.status == QuestionStatus.curated],
         key=lambda q: q.rank or 99,
     )
     killed = [q for q in questions if q.status == QuestionStatus.killed]
+    duplicates = [q for q in questions if q.status == QuestionStatus.duplicate]
+    near_miss = sample_near_miss_pairs(questions, prior_questions or [])
     accepted = [i for i in intersections if i.accepted]
     rejected = [i for i in intersections if not i.accepted]
     top = curated[:5]
@@ -95,6 +99,34 @@ def render_digest(
         lines.append(f"- {q.text}  _killed: {q.kill_reason}_")
     lines.append("")
 
+    lines += ["## Near-miss review", ""]
+    lines.append(
+        "Dedup is **lexical** (content-token Jaccard). It does **not** catch "
+        "paraphrase. A low duplicate count is not evidence that it works — only "
+        "that it ran. Flag any pair below that means the same thing in different "
+        "words. Three flagged pairs across keyed weeks is the re-trigger for a "
+        "nullable vector column."
+    )
+    lines.append("")
+    if not prior_questions:
+        lines.append("_No prior digest. This section starts the next keyed day._")
+        lines.append("")
+    elif not near_miss:
+        lines.append("_Prior digest has no surviving questions to pair._")
+        lines.append("")
+    else:
+        for i, pair in enumerate(near_miss, start=1):
+            share = (
+                " × ".join(pair.shared_verticals)
+                if pair.shared_verticals
+                else "no shared vertical"
+            )
+            lines.append(f"### Pair {i} · lexical overlap {pair.score:.2f} · {share}")
+            lines.append(f"- **Today:** {pair.today_text}")
+            lines.append(f"- **Prior day:** {pair.prior_text}")
+            lines.append("- _Same question in different words? If yes, flag it._")
+            lines.append("")
+
     lines += ["## Source health", ""]
     for h in health:
         mark = "ok" if h.ok else "DOWN"
@@ -107,7 +139,11 @@ def render_digest(
         for w in warnings:
             lines.append(f"- {w}")
         lines.append("")
-    lines.append(f"_Run cost ≈ ${cost_usd:.2f}. Coverage is shown, never used as promotion._")
+    lines.append(
+        f"_Run cost ≈ ${cost_usd:.2f}. Coverage is shown, never used as promotion. "
+        f"Lexical duplicates marked: {len(duplicates)} of {len(questions)}. "
+        f"That number counts token overlap only; it does not catch paraphrase._"
+    )
     lines.append("")
 
     markdown = "\n".join(lines)
@@ -118,9 +154,11 @@ def render_digest(
         top_ids=[q.id for q in top],
         curated_count=len(curated),
         killed_count=len(killed),
+        duplicate_count=len(duplicates),
         rejected_intersection_count=len(rejected),
         degraded=degraded,
         warnings=warnings,
+        near_miss_pairs=near_miss,
     )
 
 

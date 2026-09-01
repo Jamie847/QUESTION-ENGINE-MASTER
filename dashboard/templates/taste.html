@@ -8,6 +8,12 @@
   <p class="hint">Seeded exemplars stay until a weekly compressor rotates them against your ratings. Do not flatten this into a slogan.</p>
 </section>
 
+<section>
+  <h2>Lexical duplicate marks</h2>
+  <p class="meta-row">{{ lexical_duplicate_count }} marked duplicate · {{ curated_count }} curated (all-time)</p>
+  <p class="hint">Dedup does not catch paraphrase. A low or stable mark count is evidence the stage ran, not that it worked. The instrument is the near-miss pairs on Today, plus <code>python scripts/measure_paraphrase_leak.py</code> after three keyed weeks.</p>
+</section>
+
 {% if lens_avgs %}
 <section>
   <h2>Rated lenses</h2>

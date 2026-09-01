@@ -216,6 +216,7 @@ def _execute(run_id: int) -> None:
                 f"judgment model {settings.judgment_model} "
                 f"(cross-pollinator + curator)"
             )
+        prior_questions = _prior_curated_questions(run_id)
         doc = render_digest(
             day=date.today(),
             briefs=briefs,
@@ -225,6 +226,7 @@ def _execute(run_id: int) -> None:
             warnings=warnings,
             degraded=degraded,
             cost_usd=budget.spent_usd,
+            prior_questions=prior_questions,
         )
         _persist_digest(run_id, doc)
         status = run_status_from(degraded=degraded, curated_count=doc.curated_count)
@@ -528,6 +530,34 @@ def _prior_question_texts(run_id: int, lookback_days: int) -> list[str]:
             .where(QuestionRow.created_at >= cutoff)
         ).all()
         return [r.text for r in rows]
+
+
+def _prior_curated_questions(run_id: int) -> list[Question]:
+    """Most recent prior day's curated questions — the near-miss review sample."""
+    today = date.today()
+    with session_scope() as session:
+        prior_run_id: int | None = None
+        prior_started: datetime | None = None
+        for run in session.scalars(select(RunRow).order_by(RunRow.started_at.desc())).all():
+            if run.id == run_id:
+                continue
+            started = run.started_at
+            if started is None:
+                continue
+            if started.tzinfo is None:
+                started = started.replace(tzinfo=timezone.utc)
+            if started.astimezone(timezone.utc).date() == today:
+                continue
+            if prior_started is None or started > prior_started:
+                prior_started = started
+                prior_run_id = run.id
+        if prior_run_id is None:
+            return []
+    return [
+        q
+        for q in _load_questions(prior_run_id)
+        if q.status == QuestionStatus.curated
+    ]
 
 
 def _demo_signals() -> list[Signal]:
