@@ -170,18 +170,44 @@ Top questions · Intersections · Full bank · Cross-pollinator passed over · C
 kill floor · **Near-miss review** · Source health · Footer (cost + lexical duplicate
 count + the paraphrase caveat).
 
-## 6. Dashboard
+## 6. Dashboard — SUPERSEDED IN PLACE 2026-09-01 (§12)
+
+> **Was (v1.1 / v1.0 Today page):** ★1–5 rating widget on every question; *"promote to
+> ideation"* button for any non-top-5 question. That line treated promotion as a UI
+> affordance whose destination was implied. In the repo, `POST /api/questions/{id}/promote`
+> only sets `promoted = True` (and may force `status=curated`). No idea row, no timestamp,
+> no thread. The button goes nowhere.
+
+**Now:** ratings stay on Today / Archive (taste). **Promote** is intent: it is the only
+door into the catalog. What promotion writes, and what an idea / spec is, lives in **§12**.
+Do not invent a pipeline mid-build from this line.
 
 Today, Archive, Taste, Controls. `/healthz` is unauthenticated and does not check the
 dashboard token. `pgvector_installed` is `false`. Taste shows lexical mark counts with
-the same caveat as the footer — a low number must not read as "working."
+the same caveat as the footer — a low number must not read as "working." A Pipeline
+page is not Phase 1; it is the first slice of §12, after the §12 greenlight conditions.
 
-## 7. Stack
+## 7. Stack — SUPERSEDED IN PLACE 2026-09-01 (§12, agent_calls)
+
+> **Was (observability design, day one):** a bad question traces back through
+> smith → intersection → scout brief via an `agent_calls` row carrying stage, model,
+> prompt version, tokens, cost, latency, and input/output JSON. That sentence lived in
+> the Phase-1 build prompt (`docs/CC-BUILD-PROMPT.md` §3). **It was never in this
+> file's table list, and the table does not exist.** That omission is the same class
+> of divergence as the pgvector line: the design said per-call observability; the
+> system checkpoints a *run* (`stages[]`, `current_stage`, `cost_usd`, `warnings`,
+> `source_health`) and does not persist model, prompt version, tokens, latency, or
+> I/O per call.
+
+**Now — disposition (a):** add `agent_calls` **with the catalog**, not as a silent
+Phase-1 retrofit and not by promoting checkpoints to fill the role. Ideator and
+spec-writer each produce an object the Operator acts on; those are the calls that
+must be traceable. Checkpoints remain resume machinery. See §12.4.
 
 Python 3.12 · FastAPI + Jinja2 · SQLAlchemy · SQLite locally / Render Postgres ·
-Anthropic API only. Tables: `runs`, `signals`, `briefs`, `intersections`, `questions`,
-`ratings`, `digests`, `run_locks`. Fail loud; never silent-fallback. A degraded source
-is named, not swallowed.
+Anthropic API only. Tables that exist today: `runs`, `signals`, `briefs`,
+`intersections`, `questions`, `ratings`, `digests`, `run_locks`. Fail loud; never
+silent-fallback. A degraded source is named, not swallowed.
 
 ## 8. Metrics — SUPERSEDED IN PLACE 2026-09-01
 
@@ -206,6 +232,216 @@ A digest Jamie wants to open on day 3. Not a second scaffold. Not Voyage.
 
 ## 11. Explicitly not yet
 
-Embeddings-as-a-service. pgvector. Ideator. Resurrection. Weekly taste compressor.
-Eval harness. Extra verticals/lenses. GitHub-committed digests (Render disk is
-ephemeral; the DB is the archive).
+Embeddings-as-a-service. pgvector. Ideator (held — contract in §12, no build until
+§12.8). Resurrection. Weekly taste compressor. Eval harness. Extra verticals/lenses.
+GitHub-committed digests (Render disk is ephemeral; the DB is the archive).
+`agent_calls` (held — added with the catalog, §7 / §12.4). Pipeline page, idea
+cards, spec-writer (held — §12).
+
+## 12. Catalog & Pipeline (the second object)
+
+**Written 2026-09-01. Spec only. Not a build order.** Authorized by CP greenlight
+after Grok's response to `CP-RESPONSE-catalog-pipeline.md`. The digest is the
+newspaper. The catalog is the filing cabinet. Specs are work orders.
+
+### 12.0 Frame
+
+Three objects: `Question` (exists) → `Idea` (on human promote) → `Spec` (explicit
+human action on a Buildable card). A fourth object, `Note`, holds a belief update
+that is neither a product nor an essay.
+
+**Ratings are taste. Promotion is intent.** Never auto-file curated questions into
+the pipeline. Coverage / whitespace never promotes an idea to Buildable (same
+ruling as the curator). Ideator and spec-writer run **out-of-band from the
+dashboard**, never in the cron, so a burst of curiosity cannot starve tomorrow's
+digest. Postgres is canonical. Ideas and specs export as `.md` the way digests do.
+
+A spec may be written only when all three are true: the Operator marked the idea
+**Buildable**, the Operator clicked **Write build spec** on that card, and the spec
+names one first slice (a day-3 digest, not a platform). Specs are shaped like this
+file in miniature: concept, pipeline, not-in-scope, milestone. Supersede in place.
+
+### 12.1 Contracts
+
+IDs that already exist in this repo stay the types the repo uses. `Question.id`,
+`Intersection.id`, and `Brief.id` are `str`. `run_id` is `int`. New catalog rows
+may use `int` primary keys. `Coverage` includes `unknown`.
+
+```python
+class PipelineStatus(str, Enum):
+    inbox = "inbox"            # promoted, no card yet
+    briefed = "briefed"        # card exists, shape undecided
+    parked = "parked"          # real, not now
+    buildable = "buildable"    # Operator marked SaaS / app / tool
+    specced = "specced"        # SpecDoc exists
+    building = "building"      # handed to a CC session
+    shipped = "shipped"
+    killed = "killed"          # with reason
+
+class Shape(str, Enum):
+    product = "product"
+    investigation = "investigation"
+    essay = "essay"
+    nonprofit = "nonprofit"
+    unclassified = "unclassified"
+
+class Thread(BaseModel):
+    id: int
+    title: str                          # "Eldercare logistics under labor shortage"
+    thesis: str                         # one line, revised as the thread grows
+    verticals: list[str]
+    opened_at: date
+    last_touched: date
+    # Do not persist idea_ids / note_ids / question_ids. Derive them.
+
+class IdeaDoc(BaseModel):
+    id: int
+    question_id: str
+    thread_id: int | None
+    status: PipelineStatus
+    shape_guess: Shape                  # ideator's guess
+    shape: Shape | None                 # Operator's decision, overrides guess
+    concept: str                        # one paragraph
+    who_is_in_pain: str
+    why_now: str
+    wedge: str
+    weekend_test: str
+    why_it_might_fail: str
+    provenance: Provenance
+    decay_class: DecayClass             # column from day one; no reader until resurrection
+    kill_reason: str | None
+    created_at: datetime
+    updated_at: datetime
+
+class Provenance(BaseModel):
+    question_id: str
+    intersection_id: str | None
+    brief_ids: list[str]
+    run_id: int
+    lens: str
+    coverage: Literal["none", "thin", "crowded", "unknown"] | None
+
+class Note(BaseModel):
+    id: int
+    thread_id: int | None
+    question_id: str | None
+    body: str                           # one paragraph
+    author: Literal["operator", "ideator"]
+    accepted: bool                      # False = ideator draft; True = Operator-authored or accepted
+    created_at: datetime
+
+class SpecDoc(BaseModel):
+    id: int
+    idea_id: int
+    version: int                        # increment; old rows stay readable
+    title: str
+    concept: str
+    first_slice: str                    # the day-3 milestone, one paragraph
+    pipeline_or_architecture: str
+    stack: str
+    not_in_scope: list[str]
+    open_questions: list[str]
+    markdown: str                       # rendered, downloadable
+    created_at: datetime
+    superseded_by: int | None           # no history table
+```
+
+Tables when this ships: `threads`, `ideas`, `notes`, `specs`, `agent_calls`.
+`questions` gains `promoted_at` and `thread_id` (nullable). `thread_id` on a
+question is written **only** at promote time (Operator confirm / override). It is
+never assigned by a nightly lexical pass.
+
+**Ruling — non-promoted thread tagging (Q-C).** Out of the first slice. If it
+ever ships, it writes a `thread_candidates` join, **never** `questions.thread_id`.
+Auto-setting `thread_id` on the daily bank is auto-filing by another name. Do not
+re-open this as a cheap win.
+
+### 12.2 Thread assignment
+
+Threads are in the first slice. They answer "what territory does the system keep
+circling." Assignment is **one judgment-model call folded into the ideator
+prompt** (one prompt, two outputs: `IdeaDoc` + thread proposal: existing / new /
+ambiguous).
+
+- Suggested **existing** thread may default-accept when the thesis is on screen.
+- **New** and **ambiguous** require a click.
+- Threads are **never** auto-opened from the daily bank.
+- On the heuristic path (no `ANTHROPIC_API_KEY`): `thread_id` stays null, status
+  stays `inbox`. Do not invent a thread without a key.
+
+### 12.3 Notes
+
+Operator-authored in v1. The ideator may propose a note when `shape_guess` is
+`unclassified`; a proposed note is a draft (`accepted=False`) until the Operator
+accepts. No status, no card.
+
+### 12.4 `agent_calls` — disposition (a)
+
+The table does not exist. Stage checkpoints are not a substitute (see §7). Add
+`agent_calls` **with this catalog**. Each ideator call and each spec-writer call
+writes a row: stage, model, prompt version, tokens, cost, latency, input/output
+JSON, and the `idea_id` / `spec_id` acted on. Swarm stages may start writing the
+same table when the catalog ships; until then, do not pretend per-call
+observability exists.
+
+### 12.5 First slice (build target, after §12.8)
+
+1. **Pipeline page:** promoted questions grouped by thread, then by status. Manual
+   status moves including Parked and Killed (with reason).
+2. **On promote:** one out-of-band judgment-model call writes the `IdeaDoc` and
+   proposes a thread. Operator confirms or overrides. Heuristic path: inbox, no
+   thread (§12.2).
+3. **Notes:** add-note on any thread or question. Operator-authored in v1;
+   ideator-proposed drafts later.
+4. **Write build spec:** explicit action on Buildable cards only. Versioned
+   `SpecDoc`, downloadable as `.md`. `version` + `superseded_by`; old rows stay
+   readable. No history table.
+5. **Pipeline this week** in the **daily digest markdown** the archivist already
+   writes — not email (email does not exist). Inbox > 7 days, threads that grew,
+   Buildable cards with no spec, Notes added.
+
+Do not invent a taxonomy of shapes beyond the five above before 20 promoted items
+exist. No thread merge/split UI; manual `thread_id` edits are enough until threads
+are messy.
+
+### 12.6 Backlog (not first slice)
+
+Each item has a re-trigger so this is not a graveyard. `decay_class` on `ideas` is
+**not** backlog — it is a first-slice column with no reader until resurrection.
+
+| Item | What | Re-trigger |
+|---|---|---|
+| 6.1 Taste weight | Promoted-and-Buildable questions are top-tier exemplars; killed ideas with reasons are top-tier anti-exemplars. | Ships **with** the weekly taste profiler, not before. |
+| 6.2 Thread deep-dive | On-demand mini-run scoped to one thread's territory; no digest; candidates land on the thread. Out-of-band, separate budget cap. | Phase 3, and the thread has 3+ ideas. |
+| 6.3 Context pack | One `.md` bundle: card, questions, briefs, notes, spec. What gets dropped into a CC session. | First time a spec is handed to a build session and the Operator is copy-pasting. |
+| 6.4 Spec-writer reads prior specs | Titles + not-in-scope of specs 1..N-1, to catch overlap. | Second spec is requested. |
+| 6.5 Shape override is a labeled event | Persist every Operator override of `shape_guess`. | First slice may store `shape` vs `shape_guess`; the *aggregate override rate* is read after 20 promotes. |
+| 6.6 Kill-reason vocabulary | Distinguish "already exists (link)" / "not my problem" / "too early" in the weekly nudge sample. | After 10 killed ideas, if reasons are free-text mush. |
+| 6.7 Resurrection reads Parked ideas | Parked + `decay_class` vs today's briefs. | When the resurrection agent ships (Phase 3). Column already present. |
+| Q-C `thread_candidates` | Lexical suggest of non-promoted questions onto open threads. Never writes `questions.thread_id`. | After threads exist and the Operator is manually attaching orphans every day. |
+
+### 12.7 What not to build
+
+- Auto-filing. Auto-speccing. Anything that turns the daily bank into work orders.
+- A second markdown store in GitHub. Postgres is canonical; `.md` is an export.
+- Thread merging/splitting UI in the first slice.
+- A taxonomy of shapes beyond the five in §12.1.
+- Ideator on heuristic-fallback output. Three keyed digests first, no exceptions,
+  including "just to see the card shape."
+- Any of §12.6 in the first slice, except the `decay_class` column.
+- Auto-opening threads from the daily bank.
+- Promoting stage checkpoints to stand in for `agent_calls`.
+
+### 12.8 Greenlight conditions for the *build*
+
+Build the first slice when **all** of:
+
+1. Three keyed (Opus/Fable) digests exist and the Operator has rated them.
+2. CW has read the **deployed** service and confirmed what Promote does. The
+   2026-09-01 repo read (boolean only) closed the design question — slice 2 is
+   new tables, not a migration — and does **not** satisfy this condition.
+3. §12 is in this spec (this section) and §6 / §7 have been superseded in place.
+4. The Operator greenlights the build. This section is not that greenlight.
+
+Until then: this contract stands. Finish the Render deploy. Run three days. Rate
+everything. Do not run the ideator.
