@@ -1,5 +1,7 @@
 from datetime import date
 
+from sqlalchemy import select
+
 from swarm.agents.archivist import render_digest
 from swarm.agents.curator import run_curator
 from swarm.budget import RunBudget
@@ -140,3 +142,57 @@ def test_digest_near_miss_pairs_adjacent_days():
     assert "Lexical duplicates marked: 1 of 2" in doc.markdown
     assert doc.duplicate_count == 1
     assert len(doc.near_miss_pairs) == 1
+
+
+def test_rerender_digest_rewrites_stale_markdown():
+    from swarm.db import init_db, session_scope
+    from swarm.orm import DigestRow, QuestionRow, RunRow
+    from swarm.run_daily import _rerender_digest
+
+    init_db()
+    with session_scope() as session:
+        run = RunRow(
+            status="completed",
+            budget_usd=5.0,
+            warnings=[],
+            source_health=[],
+            stages=["archive"],
+        )
+        session.add(run)
+        session.flush()
+        run_id = run.id
+        session.add(
+            QuestionRow(
+                id=f"rerender-{run_id}-q",
+                run_id=run_id,
+                text="If cash-pay GLP-1 users quit at month 18, which clinics are still priced for forever?",
+                lens="second_order",
+                verticals=["health"],
+                coverage="thin",
+                decay_class="slow",
+                status="curated",
+                rank=1,
+            )
+        )
+        session.add(
+            DigestRow(
+                run_id=run_id,
+                date="2099-01-01",
+                title="stale",
+                markdown="# old digest without the ruling footer",
+                top_ids=[],
+                curated_count=1,
+                killed_count=0,
+                rejected_intersection_count=0,
+                degraded=False,
+                warnings=[],
+            )
+        )
+
+    assert _rerender_digest("2099-01-01") == 0
+    with session_scope() as session:
+        row = session.scalar(select(DigestRow).where(DigestRow.date == "2099-01-01"))
+        assert row is not None
+        assert "Near-miss review" in row.markdown
+        assert "does **not** catch paraphrase" in row.markdown
+        assert "Lexical duplicates marked:" in row.markdown

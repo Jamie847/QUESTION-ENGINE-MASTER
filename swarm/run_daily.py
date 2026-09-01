@@ -72,6 +72,13 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Ping the database and exit. Used by Render to prove the cron's DATABASE_URL.",
     )
+    parser.add_argument(
+        "--rerender-digest",
+        metavar="DATE",
+        nargs="?",
+        const="latest",
+        help="Rewrite an existing digest's markdown from stored artifacts (default: latest).",
+    )
     args = parser.parse_args(argv)
 
     init_db()
@@ -82,6 +89,8 @@ def main(argv: list[str] | None = None) -> int:
         ping_db()
         print("CRON_HEALTHCHECK_PASS")
         return 0
+    if args.rerender_digest:
+        return _rerender_digest(None if args.rerender_digest == "latest" else args.rerender_digest)
     run_id = args.resume
     created = False
     if not run_id:
@@ -532,32 +541,65 @@ def _prior_question_texts(run_id: int, lookback_days: int) -> list[str]:
         return [r.text for r in rows]
 
 
-def _prior_curated_questions(run_id: int) -> list[Question]:
+def _prior_curated_questions(run_id: int, *, as_of: date | None = None) -> list[Question]:
     """Most recent prior day's curated questions — the near-miss review sample."""
-    today = date.today()
+    as_of = as_of or date.today()
     with session_scope() as session:
-        prior_run_id: int | None = None
-        prior_started: datetime | None = None
-        for run in session.scalars(select(RunRow).order_by(RunRow.started_at.desc())).all():
-            if run.id == run_id:
-                continue
-            started = run.started_at
-            if started is None:
-                continue
-            if started.tzinfo is None:
-                started = started.replace(tzinfo=timezone.utc)
-            if started.astimezone(timezone.utc).date() == today:
-                continue
-            if prior_started is None or started > prior_started:
-                prior_started = started
-                prior_run_id = run.id
-        if prior_run_id is None:
+        prior = session.scalar(
+            select(DigestRow)
+            .where(DigestRow.date < as_of.isoformat())
+            .order_by(DigestRow.date.desc())
+        )
+        if not prior or prior.run_id == run_id:
             return []
+        prior_run_id = prior.run_id
     return [
         q
         for q in _load_questions(prior_run_id)
         if q.status == QuestionStatus.curated
     ]
+
+
+def _rerender_digest(day: str | None) -> int:
+    """Rewrite stored markdown so a download matches the current archivist."""
+    with session_scope() as session:
+        if day:
+            row = session.scalar(select(DigestRow).where(DigestRow.date == day))
+        else:
+            row = session.scalar(select(DigestRow).order_by(DigestRow.date.desc()))
+        if not row:
+            print("no digest to rerender", file=sys.stderr)
+            return 1
+        run_id = row.run_id
+        digest_day = date.fromisoformat(row.date)
+        run = session.get(RunRow, run_id)
+        cost = run.cost_usd if run else 0.0
+        degraded = bool(row.degraded)
+        warnings = list(row.warnings or [])
+        health = (
+            [SourceHealth.model_validate(h) for h in (run.source_health or [])]
+            if run
+            else []
+        )
+
+    briefs = _load_briefs(run_id)
+    intersections = _load_intersections(run_id)
+    questions = _load_questions(run_id)
+    prior = _prior_curated_questions(run_id, as_of=digest_day)
+    doc = render_digest(
+        day=digest_day,
+        briefs=briefs,
+        intersections=intersections,
+        questions=questions,
+        health=health,
+        warnings=warnings,
+        degraded=degraded,
+        cost_usd=cost,
+        prior_questions=prior,
+    )
+    _persist_digest(run_id, doc)
+    print(f"RERENDER_DIGEST_OK {doc.date} near_miss={len(doc.near_miss_pairs)}")
+    return 0
 
 
 def _demo_signals() -> list[Signal]:
