@@ -67,17 +67,28 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run the daily question-engine swarm")
     parser.add_argument("--resume", type=int, default=0, help="Resume this run id")
     parser.add_argument("--force", action="store_true", help="Ignore an existing lock")
+    parser.add_argument(
+        "--healthcheck",
+        action="store_true",
+        help="Ping the database and exit. Used by Render to prove the cron's DATABASE_URL.",
+    )
     args = parser.parse_args(argv)
 
     init_db()
     settings = get_settings()
+    if args.healthcheck:
+        from swarm.db import ping_db
+
+        ping_db()
+        print("CRON_HEALTHCHECK_PASS")
+        return 0
     run_id = args.resume
     created = False
     if not run_id:
         with session_scope() as session:
             run = RunRow(
                 status=RunStatus.running.value,
-                budget_usd=settings.daily_budget_usd,
+                budget_usd=settings.budget_usd,
                 warnings=[],
                 source_health=[],
                 stages=[],
@@ -120,7 +131,7 @@ def main(argv: list[str] | None = None) -> int:
 
 def _execute(run_id: int) -> None:
     settings = get_settings()
-    budget = RunBudget(settings.daily_budget_usd)
+    budget = RunBudget(settings.budget_usd)
     llm = LLM(budget)
     taste = load_seed_profile()
     warnings: list[str] = []

@@ -1,32 +1,40 @@
 # Question Engine — Render Blueprint
-# Apply this file from the dashboard (New Blueprint) or `render blueprint`.
-# Creates: Postgres + web dashboard + 10:00 UTC cron.
-# You will be prompted for ANTHROPIC_API_KEY and BRAVE_API_KEY.
+# Corrections vs spec §2 (see docs/OPEN-QUESTIONS-for-CP.md Q7):
+#   1. Postgres plan is 0.1c-256mb (current ID). basic-256mb is legacy-only.
+#   2. Shared vars live in an envVarGroup — not prose.
+#   3. DATABASE_URL is declared on EACH service (env groups cannot hold
+#      fromDatabase references).
+# No pgvector. Dedup is lexical (Q1 ruling d). Do not CREATE EXTENSION vector.
 
 databases:
   - name: question-engine-db
-    plan: basic-256mb
+    plan: 0.1c-256mb
+    postgresMajorVersion: "17"
     databaseName: question_engine
     user: question_engine
     region: oregon
 
 envVarGroups:
-  - name: question-engine-secrets
+  - name: question-engine-shared
     envVars:
       - key: ANTHROPIC_API_KEY
         sync: false
-      - key: ANTHROPIC_MODEL
-        value: claude-sonnet-4-5
-      - key: JUDGMENT_MODEL
-        value: claude-opus-4-5
       - key: BRAVE_API_KEY
         sync: false
       - key: PERPLEXITY_API_KEY
         sync: false
-      - key: ACCESS_TOKEN
+      - key: DASHBOARD_TOKEN
         generateValue: true
-      - key: DAILY_BUDGET_USD
-        value: "3.00"
+      - key: JUDGMENT_MODEL
+        value: claude-fable-5
+      - key: ANTHROPIC_MODEL
+        value: claude-sonnet-5
+      - key: RUN_BUDGET_USD
+        value: "5.00"
+      - key: RUN_TOKEN_CAP
+        value: "400000"
+      - key: SOURCE_TIMEOUT_SECONDS
+        value: "10"
       - key: PYTHON_VERSION
         value: "3.12.3"
 
@@ -38,13 +46,13 @@ services:
     region: oregon
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn dashboard.main:app --host 0.0.0.0 --port $PORT
-    healthCheckPath: /health
+    healthCheckPath: /healthz
     envVars:
+      - fromGroup: question-engine-shared
       - key: DATABASE_URL
         fromDatabase:
           name: question-engine-db
           property: connectionString
-      - fromGroup: question-engine-secrets
 
   - type: cron
     name: question-engine-swarm
@@ -55,8 +63,8 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: python -m swarm.run_daily
     envVars:
+      - fromGroup: question-engine-shared
       - key: DATABASE_URL
         fromDatabase:
           name: question-engine-db
           property: connectionString
-      - fromGroup: question-engine-secrets

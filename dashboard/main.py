@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
 from swarm.config import lenses, verticals
-from swarm.db import init_db, session_scope
+from swarm.db import init_db, ping_db, session_scope
 from swarm.lock import current_lock
 from swarm.orm import DigestRow, IntersectionRow, QuestionRow, RatingRow, RunRow
 from swarm.settings import get_settings
@@ -39,10 +39,10 @@ app.mount("/static", StaticFiles(directory=str(APP_DIR / "static")), name="stati
 @app.middleware("http")
 async def access_gate(request: Request, call_next):
     settings = get_settings()
-    token = settings.access_token
+    token = settings.auth_token
     if not token:
         return await call_next(request)
-    if request.url.path in {"/health"}:
+    if request.url.path in {"/health", "/healthz"}:
         return await call_next(request)
     provided = (
         request.headers.get("authorization", "").removeprefix("Bearer ").strip()
@@ -64,8 +64,19 @@ async def access_gate(request: Request, call_next):
 
 
 @app.get("/health")
+@app.get("/healthz")
 def health() -> dict:
-    return {"ok": True}
+    db_ok = False
+    try:
+        db_ok = ping_db()
+    except Exception:
+        db_ok = False
+    return {
+        "ok": db_ok,
+        "database": db_ok,
+        "pgvector_installed": False,
+        "dedup": "lexical",
+    }
 
 
 def _latest_digest() -> DigestRow | None:

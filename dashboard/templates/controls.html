@@ -10,7 +10,7 @@
 <section class="run-box">
   <button type="button" id="run-btn" class="primary">Run swarm now</button>
   <p class="muted" id="run-msg">
-    Budget ${{ "%.2f"|format(settings.daily_budget_usd) }} ·
+    Budget ${{ "%.2f"|format(settings.budget_usd) }} ·
     volume {{ settings.anthropic_model }} ·
     judgment {{ settings.judgment_model }} ·
     {% if settings.anthropic_api_key %}Anthropic live{% else %}heuristic writer (no API key){% endif %}

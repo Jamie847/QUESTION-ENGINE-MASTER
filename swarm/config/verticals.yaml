@@ -4,6 +4,7 @@ verticals:
   - id: ai
     name: AI
     enabled: true
+    phase: 1
     search_queries:
       - "artificial intelligence breakthrough"
       - "foundation model regulation"
@@ -50,6 +51,7 @@ verticals:
   - id: health
     name: Health
     enabled: true
+    phase: 1
     search_queries:
       - "FDA approval drug"
       - "GLP-1 shortage"
@@ -101,6 +103,7 @@ verticals:
   - id: business
     name: Business/Finance
     enabled: true
+    phase: 1
     search_queries:
       - "Federal Reserve interest rates"
       - "startup funding winter"

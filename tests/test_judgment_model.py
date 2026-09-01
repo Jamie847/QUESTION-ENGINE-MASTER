@@ -5,9 +5,10 @@ from swarm.settings import Settings, get_settings
 def test_judgment_model_defaults_to_opus():
     get_settings.cache_clear()
     s = Settings()
-    assert s.judgment_model.startswith("claude-opus")
+    assert s.judgment_model.startswith("claude-fable")
     assert s.anthropic_model.startswith("claude-sonnet")
     assert s.judgment_model != s.anthropic_model
+    assert s.budget_usd == 5.0
 
 
 def test_opus_reservation_is_more_expensive():

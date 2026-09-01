@@ -18,13 +18,13 @@ def _load_yaml(name: str) -> dict[str, Any]:
 @lru_cache
 def verticals() -> list[dict[str, Any]]:
     rows = _load_yaml("verticals.yaml").get("verticals") or []
-    return [v for v in rows if v.get("enabled", True)]
+    return [v for v in rows if v.get("enabled", True) and v.get("phase", 1) <= 1]
 
 
 @lru_cache
 def lenses() -> list[dict[str, Any]]:
     rows = _load_yaml("lenses.yaml").get("lenses") or []
-    return [ln for ln in rows if ln.get("enabled", True)]
+    return [ln for ln in rows if ln.get("enabled", True) and ln.get("phase", 1) <= 1]
 
 
 def vertical_by_id(vid: str) -> dict[str, Any] | None:

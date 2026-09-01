@@ -1,7 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import AliasChoices, Field, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -15,15 +15,23 @@ class Settings(BaseSettings):
     )
 
     database_url: str = "sqlite:///./question_engine.db"
+    dashboard_token: str = ""
     access_token: str = ""
     anthropic_api_key: str = ""
-    anthropic_model: str = "claude-sonnet-4-5"
-    judgment_model: str = "claude-opus-4-5"
+    anthropic_model: str = "claude-sonnet-5"
+    judgment_model: str = "claude-fable-5"
     brave_api_key: str = ""
     perplexity_api_key: str = ""
-    daily_budget_usd: float = 2.0
+    run_budget_usd: float = Field(
+        default=5.0,
+        validation_alias=AliasChoices("RUN_BUDGET_USD", "DAILY_BUDGET_USD"),
+    )
+    run_token_cap: int = 400_000
     port: int = 43417
-    source_timeout_s: float = 12.0
+    source_timeout_s: float = Field(
+        default=10.0,
+        validation_alias=AliasChoices("SOURCE_TIMEOUT_SECONDS", "SOURCE_TIMEOUT_S"),
+    )
     lock_stale_after_s: int = 7200
     dedup_lookback_days: int = 45
     dedup_threshold: float = 0.64
@@ -33,6 +41,15 @@ class Settings(BaseSettings):
     reddit_user_agent: str = (
         "python:question-engine:1.0 (by /u/QuestionEngine; personal research digest)"
     )
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def auth_token(self) -> str:
+        return self.dashboard_token or self.access_token
+
+    @property
+    def budget_usd(self) -> float:
+        return self.run_budget_usd
 
     @property
     def sqlalchemy_url(self) -> str:

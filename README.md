@@ -19,10 +19,11 @@ uvicorn dashboard.main:app --host 0.0.0.0 --port 43417
 
 Open `http://127.0.0.1:43417`. The swarm runs without keys (Hacker News + Wikipedia; Reddit if the host allows it), but that path is a **heuristic fallback**. Do not judge question quality until `ANTHROPIC_API_KEY` and `BRAVE_API_KEY` are set — HN alone is too narrow for Health and Business, and the writer is template-shaped by design.
 
-- `ANTHROPIC_MODEL` (default `claude-sonnet-4-5`) — scouts and smiths
-- `JUDGMENT_MODEL` (default `claude-opus-4-5`) — cross-pollinator and curator. This is the one place not to economize.
+- `ANTHROPIC_MODEL` (default `claude-sonnet-5`) — scouts and smiths
+- `JUDGMENT_MODEL` (default `claude-fable-5`) — cross-pollinator and curator
+- Dedup is **lexical** (no Voyage, no pgvector). See `docs/OPEN-QUESTIONS-for-CP.md` Q1.
 
-`ACCESS_TOKEN` locks the dashboard. Leave it empty locally.
+`DASHBOARD_TOKEN` (or `ACCESS_TOKEN`) locks the dashboard. Leave it empty locally.
 
 ## Daily pipeline
 
@@ -50,7 +51,7 @@ Open `http://127.0.0.1:43417`. The swarm runs without keys (Hacker News + Wikipe
 | Resource | Name | Role |
 |---|---|---|
 | Postgres | `question-engine-db` | Canonical store (digests, questions, ratings, run lock) |
-| Web | `question-engine-dashboard` | FastAPI UI, binds `0.0.0.0:$PORT`, health at `/health` |
+| Web | `question-engine-dashboard` | FastAPI UI, binds `0.0.0.0:$PORT`, health at `/healthz` |
 | Cron | `question-engine-swarm` | `python -m swarm.run_daily` at 10:00 UTC |
 
 ### Hand this to Claude Cowork (or apply it yourself)
@@ -61,8 +62,9 @@ Open `http://127.0.0.1:43417`. The swarm runs without keys (Hacker News + Wikipe
    - `ANTHROPIC_API_KEY` (required for a real digest)
    - `BRAVE_API_KEY` (required for Health and Business scouts)
    - `PERPLEXITY_API_KEY` (optional — leave blank)
-4. `ACCESS_TOKEN` is auto-generated. Copy it from the env group after deploy and open `https://<service>.onrender.com/?token=…`.
-5. After the first deploy is live, trigger an immediate run from **Controls** (do not wait for 10:00 UTC). Check source health: Brave and HN should be up; Reddit may be DOWN — leave it.
+4. `DASHBOARD_TOKEN` is auto-generated. Copy it from the env group after deploy and open `https://<service>.onrender.com/?token=…`.
+5. Prove infra before trusting a digest: `GET /healthz` on the web service, and `python -m swarm.run_daily --healthcheck` on the cron (look for `CRON_HEALTHCHECK_PASS`).
+6. After the first deploy is live, trigger an immediate run from **Controls** (do not wait for 10:00 UTC). Check source health: Brave and HN should be up; Reddit may be DOWN — leave it.
 
 Do not add an ideator, resurrection agent, or extra verticals on this deploy. Three keyed digests first.
 

@@ -4,6 +4,7 @@ lenses:
   - id: contrarian
     name: Contrarian
     enabled: true
+    phase: 1
     essence: >
       What if the consensus interpretation of this trend is wrong?
       Who is quietly positioned if it reverses, stalls, or was
@@ -12,6 +13,7 @@ lenses:
   - id: second_order
     name: Second-Order
     enabled: true
+    phase: 1
     essence: >
       If this continues 3–5 years, what breaks? What becomes scarce
       or abundant? Which jobs, behaviors, or institutions change
@@ -21,6 +23,7 @@ lenses:
   - id: opportunity
     name: Opportunity/Arbitrage
     enabled: true
+    phase: 1
     essence: >
       What can be built or organized now that could not 12 months
       ago? Where is there an information or capability gap between
