@@ -25,7 +25,7 @@ If the Anthropic key **is** set and every model call fails (a 400 is the usual c
 - `JUDGMENT_MODEL` (default `claude-fable-5`) — cross-pollinator and curator
 - Dedup is **lexical** (no Voyage, no pgvector). `/healthz` reports `pgvector_installed: false` on purpose. See `docs/CP-RULING-dedup.md`.
 
-`DASHBOARD_TOKEN` (or `ACCESS_TOKEN`) locks the dashboard. Leave it empty locally.
+`DASHBOARD_TOKEN` is optional. Empty (the default on Render now) means the dashboard URL opens and **Run swarm now** works with no query string. Set a value only if you want the public URL locked.
 
 ## Daily pipeline
 
@@ -64,7 +64,7 @@ If the Anthropic key **is** set and every model call fails (a 400 is the usual c
    - `ANTHROPIC_API_KEY` (required for a real digest)
    - `BRAVE_API_KEY` (required for Health and Business scouts)
    - `PERPLEXITY_API_KEY` (optional — leave blank)
-4. `DASHBOARD_TOKEN` is auto-generated. Copy it from the env group after deploy and open `https://<service>.onrender.com/?token=…`.
+4. Open `https://question-engine-dashboard.onrender.com/controls` and click **Run swarm now**. No token. If you later set `DASHBOARD_TOKEN`, append `?token=…` once.
 5. Prove infra before trusting a digest: `GET /healthz` on the web service, and `python -m swarm.run_daily --healthcheck` on the cron (look for `CRON_HEALTHCHECK_PASS`).
 6. After the first deploy is live, trigger an immediate run from **Controls** (do not wait for 10:00 UTC). Check source health: Brave and HN should be up; Reddit may be DOWN — leave it.
 

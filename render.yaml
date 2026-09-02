@@ -23,8 +23,10 @@ envVarGroups:
         sync: false
       - key: PERPLEXITY_API_KEY
         sync: false
+      # Optional lock. Leave unset so the onrender URL opens and Run works.
+      # Set a value in the Dashboard only if you want ?token= again.
       - key: DASHBOARD_TOKEN
-        generateValue: true
+        value: ""
       - key: JUDGMENT_MODEL
         value: claude-fable-5
       - key: ANTHROPIC_MODEL
