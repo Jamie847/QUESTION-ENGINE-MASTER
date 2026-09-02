@@ -19,6 +19,8 @@ uvicorn dashboard.main:app --host 0.0.0.0 --port 43417
 
 Open `http://127.0.0.1:43417`. The swarm runs without keys (Hacker News + Wikipedia; Reddit if the host allows it), but that path is a **heuristic fallback**. Do not judge question quality until `ANTHROPIC_API_KEY` and `BRAVE_API_KEY` are set — HN alone is too narrow for Health and Business, and the writer is template-shaped by design.
 
+If the Anthropic key **is** set and every model call fails (a 400 is the usual culprit: Claude 5 adaptive thinking plus a forced `tool_choice`), the run **fails closed**. It will not archive a template digest and pretend Fable wrote it. Cron logs will include the API error body.
+
 - `ANTHROPIC_MODEL` (default `claude-sonnet-5`) — scouts and smiths
 - `JUDGMENT_MODEL` (default `claude-fable-5`) — cross-pollinator and curator
 - Dedup is **lexical** (no Voyage, no pgvector). `/healthz` reports `pgvector_installed: false` on purpose. See `docs/CP-RULING-dedup.md`.

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 import httpx
 
 from swarm.config import verticals
@@ -7,6 +9,23 @@ from swarm.models import Signal
 from swarm.settings import get_settings
 from swarm.sources.base import SourceAdapter
 from swarm.sources.routing import hint_verticals
+
+
+def extract_brave_results(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    """Brave News returns ``results`` as a list. Brave Web nests them
+    under ``web.results`` (and sometimes ``news.results``). Either shape
+    is fine; a list must never be treated as a dict."""
+    if not isinstance(payload, dict):
+        return []
+    for key in ("results", "news", "web"):
+        value = payload.get(key)
+        if isinstance(value, list):
+            return [item for item in value if isinstance(item, dict)]
+        if isinstance(value, dict):
+            inner = value.get("results")
+            if isinstance(inner, list):
+                return [item for item in inner if isinstance(item, dict)]
+    return []
 
 
 class BraveSource(SourceAdapter):
@@ -40,15 +59,7 @@ class BraveSource(SourceAdapter):
                             params={"q": query, "count": 8},
                         )
                     resp.raise_for_status()
-                    payload = resp.json()
-                    results = (payload.get("results") or payload.get("news") or {}).get(
-                        "results"
-                    )
-                    if results is None:
-                        results = payload.get("results") or []
-                    if isinstance(results, dict):
-                        results = results.get("results") or []
-                    for item in results:
+                    for item in extract_brave_results(resp.json()):
                         title = (item.get("title") or "").strip()
                         if not title:
                             continue

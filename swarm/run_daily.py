@@ -214,15 +214,28 @@ def _execute(run_id: int) -> None:
         questions = _load_questions(run_id)
 
     if StageName.archive.value not in done:
+        if llm.writer_failed():
+            raise RuntimeError(
+                "ANTHROPIC_API_KEY is set but every model call failed. "
+                "Refusing to archive a heuristic digest. Last error: "
+                f"{llm.last_error}"
+            )
         _set_stage(run_id, StageName.archive)
         degraded = any(not h.ok for h in health) or any("degraded" in w for w in warnings)
         if not llm.available:
             warnings.append("ANTHROPIC_API_KEY unset — heuristic writer used")
             degraded = True
+        elif llm.failures:
+            warnings.append(
+                f"Anthropic: {llm.successes} ok / {llm.failures} failed "
+                f"of {llm.attempts} attempts. Last error: {llm.last_error}"
+            )
+            degraded = True
         else:
             warnings.append(
-                f"volume model {settings.anthropic_model}; "
-                f"judgment model {settings.judgment_model} "
+                f"writer used Claude ({llm.successes} calls); "
+                f"volume={settings.anthropic_model}; "
+                f"judgment={settings.judgment_model} "
                 f"(cross-pollinator + curator)"
             )
         prior_questions = _prior_curated_questions(run_id)

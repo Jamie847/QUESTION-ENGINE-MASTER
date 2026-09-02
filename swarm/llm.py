@@ -1,10 +1,137 @@
 from __future__ import annotations
 
 import json
+import logging
+import re
 from typing import Any
 
 from swarm.budget import RunBudget
 from swarm.settings import get_settings
+
+log = logging.getLogger("swarm.llm")
+
+_RETRY_HINTS = (
+    "tool_choice forces tool use",
+    "thinking may not be enabled",
+    "forced tool use",
+    "thinking.type.enabled",
+    "thinking.type.disabled",
+    "not supported for this model",
+    "sampling parameters",
+    "temperature",
+)
+
+
+def format_anthropic_error(exc: BaseException) -> str:
+    """Pull the API body out of an SDK exception so logs are actually useful."""
+    status = getattr(exc, "status_code", None)
+    body = getattr(exc, "body", None)
+    message = getattr(exc, "message", None)
+    parts = [type(exc).__name__]
+    if status is not None:
+        parts.append(f"status={status}")
+    if message:
+        parts.append(str(message))
+    else:
+        parts.append(str(exc))
+    if body is not None:
+        try:
+            parts.append(json.dumps(body) if not isinstance(body, str) else body)
+        except TypeError:
+            parts.append(repr(body))
+    return " | ".join(parts)
+
+
+def is_retryable_request_error(text: str) -> bool:
+    low = text.lower()
+    return any(hint in low for hint in _RETRY_HINTS)
+
+
+def build_message_kwargs(
+    *,
+    model: str,
+    system: str,
+    user: str,
+    schema: dict[str, Any],
+    max_tokens: int,
+    judgment: bool,
+) -> dict[str, Any]:
+    """Build a Messages API payload that Claude 5 will accept.
+
+    Sonnet 5 and Fable 5 turn adaptive thinking on by default. Forced
+    ``tool_choice`` plus thinking is a 400 on several of those models
+    (always on Fable 5.1). Volume calls disable thinking and keep the
+    forced emit tool. Judgment calls leave thinking on, raise the token
+    ceiling, and use ``tool_choice=auto``.
+    """
+    tools = [
+        {
+            "name": "emit",
+            "description": "Return the structured result. You must call this tool.",
+            "input_schema": schema,
+        }
+    ]
+    kwargs: dict[str, Any] = {
+        "model": model,
+        "max_tokens": max_tokens,
+        "system": system,
+        "messages": [{"role": "user", "content": user}],
+        "tools": tools,
+    }
+    if judgment:
+        kwargs["max_tokens"] = max(max_tokens, 12_000)
+        kwargs["tool_choice"] = {"type": "auto"}
+        kwargs["output_config"] = {"effort": "medium"}
+    else:
+        kwargs["thinking"] = {"type": "disabled"}
+        kwargs["tool_choice"] = {"type": "tool", "name": "emit"}
+    return kwargs
+
+
+def strip_new_api_fields(kwargs: dict[str, Any]) -> dict[str, Any]:
+    """Fallback for an old SDK or a model that rejects thinking/effort."""
+    out = {k: v for k, v in kwargs.items() if k not in {"thinking", "output_config"}}
+    out["tool_choice"] = {"type": "auto"}
+    return out
+
+
+def parse_structured_payload(msg: Any) -> dict[str, Any] | None:
+    texts: list[str] = []
+    for block in getattr(msg, "content", None) or []:
+        kind = getattr(block, "type", None)
+        if kind == "tool_use" and getattr(block, "name", None) == "emit":
+            data = getattr(block, "input", None)
+            if isinstance(data, str):
+                try:
+                    data = json.loads(data)
+                except json.JSONDecodeError:
+                    continue
+            if isinstance(data, dict):
+                return data
+        if kind == "text":
+            text = getattr(block, "text", None)
+            if text:
+                texts.append(text)
+    for text in texts:
+        parsed = _json_object(text)
+        if parsed is not None:
+            return parsed
+    return None
+
+
+def _json_object(text: str) -> dict[str, Any] | None:
+    text = text.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:json)?\s*", "", text)
+        text = re.sub(r"\s*```$", "", text)
+    start, end = text.find("{"), text.rfind("}")
+    if start < 0 or end <= start:
+        return None
+    try:
+        data = json.loads(text[start : end + 1])
+    except json.JSONDecodeError:
+        return None
+    return data if isinstance(data, dict) else None
 
 
 class LLM:
@@ -12,6 +139,10 @@ class LLM:
         self.budget = budget
         self.settings = get_settings()
         self._client = None
+        self.attempts = 0
+        self.successes = 0
+        self.failures = 0
+        self.last_error = ""
         if self.settings.anthropic_api_key:
             import anthropic
 
@@ -20,6 +151,10 @@ class LLM:
     @property
     def available(self) -> bool:
         return self._client is not None
+
+    def writer_failed(self) -> bool:
+        """Key is set, every attempted call failed. Do not publish templates."""
+        return self.available and self.attempts > 0 and self.successes == 0
 
     def complete_json(
         self,
@@ -36,31 +171,30 @@ class LLM:
         if not self.available:
             return None
         model = (
-            self.settings.judgment_model
-            if judgment
-            else self.settings.anthropic_model
+            self.settings.judgment_model if judgment else self.settings.anthropic_model
         )
         estimate = self.budget.estimate_tokens(
             estimate_in, estimate_out, judgment=judgment
         )
         if not self.budget.can_spend(estimate, reserve=reserve):
+            log.warning("skipping %s — budget would exceed cap", model)
             return None
+
+        kwargs = build_message_kwargs(
+            model=model,
+            system=system,
+            user=user,
+            schema=schema,
+            max_tokens=max_tokens,
+            judgment=judgment,
+        )
+        self.attempts += 1
         try:
-            msg = self._client.messages.create(  # type: ignore[union-attr]
-                model=model,
-                max_tokens=max_tokens,
-                system=system,
-                messages=[{"role": "user", "content": user}],
-                tools=[
-                    {
-                        "name": "emit",
-                        "description": "Return the structured result.",
-                        "input_schema": schema,
-                    }
-                ],
-                tool_choice={"type": "tool", "name": "emit"},
-            )
-        except Exception:
+            msg = self._create(kwargs)
+        except Exception as exc:  # noqa: BLE001 — recorded, then fallback
+            self.failures += 1
+            self.last_error = format_anthropic_error(exc)
+            log.error("anthropic call failed model=%s %s", model, self.last_error)
             return None
 
         usage = getattr(msg, "usage", None)
@@ -75,10 +209,25 @@ class LLM:
         else:
             self.budget.charge(estimate)
 
-        for block in msg.content:
-            if getattr(block, "type", None) == "tool_use" and block.name == "emit":
-                data = block.input
-                if isinstance(data, str):
-                    return json.loads(data)
-                return data
-        return None
+        data = parse_structured_payload(msg)
+        if data is None:
+            self.failures += 1
+            stop = getattr(msg, "stop_reason", None)
+            self.last_error = f"no structured payload from {model} (stop_reason={stop})"
+            log.error("%s", self.last_error)
+            return None
+        self.successes += 1
+        return data
+
+    def _create(self, kwargs: dict[str, Any]) -> Any:
+        try:
+            return self._client.messages.create(**kwargs)  # type: ignore[union-attr]
+        except TypeError as exc:
+            log.warning("SDK rejected request keys, retrying stripped: %s", exc)
+            return self._client.messages.create(**strip_new_api_fields(kwargs))  # type: ignore[union-attr]
+        except Exception as exc:
+            text = format_anthropic_error(exc)
+            if not is_retryable_request_error(text):
+                raise
+            log.warning("retrying without thinking / forced tool_choice: %s", text)
+            return self._client.messages.create(**strip_new_api_fields(kwargs))  # type: ignore[union-attr]

@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     run_token_cap: int = 400_000
     port: int = 43417
     source_timeout_s: float = Field(
-        default=10.0,
+        default=45.0,
         validation_alias=AliasChoices("SOURCE_TIMEOUT_SECONDS", "SOURCE_TIMEOUT_S"),
     )
     lock_stale_after_s: int = 7200

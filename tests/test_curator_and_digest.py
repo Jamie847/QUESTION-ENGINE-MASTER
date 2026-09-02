@@ -150,7 +150,9 @@ def test_rerender_digest_rewrites_stale_markdown():
     from swarm.run_daily import _rerender_digest
 
     init_db()
+    day = "2099-01-02"
     with session_scope() as session:
+        session.query(DigestRow).filter(DigestRow.date == day).delete()
         run = RunRow(
             status="completed",
             budget_usd=5.0,
@@ -177,7 +179,7 @@ def test_rerender_digest_rewrites_stale_markdown():
         session.add(
             DigestRow(
                 run_id=run_id,
-                date="2099-01-01",
+                date=day,
                 title="stale",
                 markdown="# old digest without the ruling footer",
                 top_ids=[],
@@ -189,9 +191,9 @@ def test_rerender_digest_rewrites_stale_markdown():
             )
         )
 
-    assert _rerender_digest("2099-01-01") == 0
+    assert _rerender_digest(day) == 0
     with session_scope() as session:
-        row = session.scalar(select(DigestRow).where(DigestRow.date == "2099-01-01"))
+        row = session.scalar(select(DigestRow).where(DigestRow.date == day))
         assert row is not None
         assert "Near-miss review" in row.markdown
         assert "does **not** catch paraphrase" in row.markdown

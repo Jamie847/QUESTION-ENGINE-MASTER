@@ -34,7 +34,7 @@ envVarGroups:
       - key: RUN_TOKEN_CAP
         value: "400000"
       - key: SOURCE_TIMEOUT_SECONDS
-        value: "10"
+        value: "45"
       - key: PYTHON_VERSION
         value: "3.12.3"
 

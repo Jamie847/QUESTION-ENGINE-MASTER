@@ -57,7 +57,7 @@ def run_cross_pollinator(
     produced = _llm(briefs, llm, run_id) or _fallback(briefs, run_id)
     # Always persist rejects. If the model forgot, synthesize a few.
     if not any(not i.accepted for i in produced):
-        produced.extend(_obvious_rejects(briefs))
+        produced.extend(_obvious_rejects(briefs, run_id))
     return produced
 
 
@@ -189,7 +189,7 @@ def _fallback(briefs: list[Brief], run_id: int) -> list[Intersection]:
     return accepted[:8] + rejected[:8]
 
 
-def _obvious_rejects(briefs: list[Brief]) -> list[Intersection]:
+def _obvious_rejects(briefs: list[Brief], run_id: int = 0) -> list[Intersection]:
     if len(briefs) < 2:
         return []
     a, b = briefs[0], briefs[1]
