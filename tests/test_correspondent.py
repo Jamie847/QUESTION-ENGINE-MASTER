@@ -14,6 +14,8 @@ from swarm.agents.correspondent import (
     assemble_markdown,
     extract_numbers,
     select_question,
+    ungrounded_claims,
+    ungrounded_names,
     ungrounded_numbers,
     write_issue,
 )
@@ -116,15 +118,25 @@ def _essay_body(markdown: str) -> str:
 def test_ungrounded_number_checker_goes_red_on_unconstrained_prose():
     """This is the assertion an unconstrained 800-word pad fails."""
     source = "Clinics that sell the drug for cash are changing how they talk about staying."
-    padded = "The weight-loss market grew 40% last year and now worth $12 billion."
-    leaked = ungrounded_numbers(padded, source)
-    assert leaked, "unconstrained pad must produce ungrounded numbers"
+    padded = (
+        "Novo Nordisk grew 40% last year and Pfizer announced a twelve-billion deal."
+    )
+    leaked = ungrounded_claims(padded, source)
+    assert leaked, "unconstrained pad must produce ungrounded numerals or names"
     assert any("40" in n for n in leaked)
+    assert "Novo Nordisk" in leaked
+    assert "Pfizer" in leaked
     assert extract_numbers(source) == set()
+    assert ungrounded_names(padded, source) == {"Novo Nordisk", "Pfizer"}
 
 
 def test_draft_has_no_ungrounded_numeric_claims():
-    """Against an unconstrained writer the ungrounded-number assertion goes red."""
+    """Against an unconstrained writer the ungrounded-claim assertion goes red.
+
+    Numerals and proper nouns in the essay body must already appear in the
+    concatenated briefs / question / thesis. A source-list footer does not
+    satisfy this.
+    """
     _seed_week()
     row = write_issue()
     assert row is not None
@@ -141,7 +153,8 @@ def test_draft_has_no_ungrounded_numeric_claims():
         "The collision is the coupon and the clinic's forever-patient math."
     )
     body = _essay_body(row.markdown)
-    assert ungrounded_numbers(body, source) == set()
+    assert "https://example.com/coupon-change" in row.markdown
+    assert ungrounded_claims(body, source) == set()
 
 
 def test_no_publish_path_exists():

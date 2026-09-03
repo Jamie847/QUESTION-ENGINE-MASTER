@@ -136,9 +136,58 @@ class Selection:
     digest_date: str
 
 
+# House words the assembler injects. Not claims about the world.
+_NAME_STOP = {
+    "a",
+    "an",
+    "and",
+    "but",
+    "correspondent",
+    "draft",
+    "if",
+    "jamie",
+    "operator",
+    "selected",
+    "sources",
+    "the",
+    "this",
+    "that",
+    "we",
+    "what",
+    "when",
+    "which",
+    "why",
+}
+
+_MULTI_NAME = re.compile(r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\b")
+_SINGLE_NAME = re.compile(r"\b([A-Z][a-z]{2,})\b")
+
+
 def extract_numbers(text: str) -> set[str]:
     cleaned = re.sub(r"\d{4}-\d{2}-\d{2}", "", text)
     return {m.group(0).replace(" ", "") for m in _NUMBER.finditer(cleaned)}
+
+
+def extract_proper_nouns(text: str) -> set[str]:
+    """Multi-word names plus mid-sentence capitalized words.
+
+    Sentence-initial 'The' / 'If' are dropped. Against an unconstrained
+    writer, 'Novo Nordisk' and 'Pfizer' land here.
+    """
+    names: set[str] = set()
+    covered: set[str] = set()
+    for m in _MULTI_NAME.finditer(text):
+        phrase = m.group(1)
+        names.add(phrase)
+        covered.update(phrase.split())
+    for sent in re.split(r"[.!?]\s+", text):
+        rest = sent.split(None, 1)
+        tail = rest[1] if len(rest) > 1 else ""
+        for m in _SINGLE_NAME.finditer(tail):
+            word = m.group(1)
+            if word.lower() not in _NAME_STOP and word not in covered:
+                names.add(word)
+    return names
 
 
 def ungrounded_numbers(essay: str, source: str) -> set[str]:
@@ -150,12 +199,22 @@ def ungrounded_numbers(essay: str, source: str) -> set[str]:
     return extract_numbers(essay) - extract_numbers(source)
 
 
+def ungrounded_names(essay: str, source: str) -> set[str]:
+    """Proper nouns in the essay that do not appear in the source pack."""
+    src = source.lower()
+    return {n for n in extract_proper_nouns(essay) if n.lower() not in src}
+
+
+def ungrounded_claims(essay: str, source: str) -> set[str]:
+    return ungrounded_numbers(essay, source) | ungrounded_names(essay, source)
+
+
 def drop_ungrounded_sentences(essay: str, source: str) -> tuple[str, int]:
     parts = re.split(r"(?<=[.!?])\s+", essay.strip())
     kept: list[str] = []
     dropped = 0
     for part in parts:
-        if ungrounded_numbers(part, source):
+        if ungrounded_claims(part, source):
             dropped += 1
             continue
         kept.append(part)
@@ -379,9 +438,9 @@ def assemble_markdown(
         warnings.append(
             f"removed {dropped} sentence(s) whose figures were not in the grounding pack"
         )
-    leftover = ungrounded_numbers(essay, source)
+    leftover = ungrounded_claims(essay, source)
     if leftover:
-        warnings.append(f"ungrounded numbers still present after filter: {sorted(leftover)}")
+        warnings.append(f"ungrounded claims still present after filter: {sorted(leftover)}")
         essay = re.sub(_NUMBER, "", essay)
         essay = re.sub(r"\s{2,}", " ", essay).strip()
 
