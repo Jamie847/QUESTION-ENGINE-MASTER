@@ -21,6 +21,8 @@ def is_stale(age_days: int, threshold_days: int) -> bool:
 
 
 def last_run_label(age_days: int) -> str:
+    if age_days == 0:
+        return "last run: today"
     if age_days == 1:
         return "last run: 1 day ago"
     return f"last run: {age_days} days ago"

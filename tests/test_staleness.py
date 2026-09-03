@@ -15,6 +15,7 @@ def test_age_and_stale_threshold():
     assert digest_age_days(date(2026, 9, 7), as_of=as_of) == 3
     assert is_stale(3, 3) is False
     assert is_stale(4, 3) is True
+    assert last_run_label(0) == "last run: today"
     assert last_run_label(1) == "last run: 1 day ago"
     assert last_run_label(4) == "last run: 4 days ago"
 
