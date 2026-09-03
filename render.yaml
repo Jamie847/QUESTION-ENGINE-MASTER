@@ -19,6 +19,8 @@ envVarGroups:
     envVars:
       - key: ANTHROPIC_API_KEY
         sync: false
+      - key: ANTHROPIC_WORKSPACE_ID
+        sync: false
       - key: BRAVE_API_KEY
         sync: false
       - key: PERPLEXITY_API_KEY

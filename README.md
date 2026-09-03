@@ -23,6 +23,7 @@ If the Anthropic key **is** set and every model call fails (a 400 is the usual c
 
 - `ANTHROPIC_MODEL` (default `claude-sonnet-5`) — scouts and smiths
 - `JUDGMENT_MODEL` (default `claude-fable-5`) — cross-pollinator and curator
+- `ANTHROPIC_WORKSPACE_ID` — required if the key is identity-linked / multi-workspace (`wrkspc_…`). A key scoped to one workspace does not need it.
 - Dedup is **lexical** (no Voyage, no pgvector). `/healthz` reports `pgvector_installed: false` on purpose. See `docs/CP-RULING-dedup.md`.
 
 `DASHBOARD_TOKEN` is optional. Empty (the default on Render now) means the dashboard URL opens and **Run swarm now** works with no query string. Set a value only if you want the public URL locked.

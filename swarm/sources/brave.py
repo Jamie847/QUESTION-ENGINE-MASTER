@@ -58,6 +58,8 @@ class BraveSource(SourceAdapter):
                             "https://api.search.brave.com/res/v1/web/search",
                             params={"q": query, "count": 8},
                         )
+                    if resp.status_code == 429:
+                        continue
                     resp.raise_for_status()
                     for item in extract_brave_results(resp.json()):
                         title = (item.get("title") or "").strip()

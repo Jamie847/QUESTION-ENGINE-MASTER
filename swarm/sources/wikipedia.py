@@ -40,16 +40,24 @@ class WikipediaSource(SourceAdapter):
 
     async def fetch(self) -> list[Signal]:
         settings = get_settings()
-        day = datetime.now(timezone.utc).date() - timedelta(days=1)
-        path = (
-            "https://wikimedia.org/api/rest_v1/metrics/pageviews/top/"
-            f"en.wikipedia/all-access/{day:%Y}/{day:%m}/{day:%d}"
-        )
         headers = {"User-Agent": settings.user_agent, "Accept": "application/json"}
+        payload: dict | None = None
         async with httpx.AsyncClient(timeout=settings.source_timeout_s, headers=headers) as client:
-            resp = await client.get(path)
-            resp.raise_for_status()
-            payload = resp.json()
+            # Top-views for "yesterday" is often unpublished for ~24h.
+            for lag in (1, 2, 3):
+                day = datetime.now(timezone.utc).date() - timedelta(days=lag)
+                path = (
+                    "https://wikimedia.org/api/rest_v1/metrics/pageviews/top/"
+                    f"en.wikipedia/all-access/{day:%Y}/{day:%m}/{day:%d}"
+                )
+                resp = await client.get(path)
+                if resp.status_code == 404:
+                    continue
+                resp.raise_for_status()
+                payload = resp.json()
+                break
+        if not payload:
+            return []
         articles = (
             ((payload.get("items") or [{}])[0].get("articles") or [])
         )

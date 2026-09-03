@@ -77,6 +77,29 @@ def test_parse_tool_use_and_fenced_json():
     assert parse_structured_payload(SimpleNamespace(content=[text])) == {"ok": True}
 
 
+def test_client_sends_workspace_header(monkeypatch):
+    from swarm.settings import get_settings
+
+    get_settings.cache_clear()
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    monkeypatch.setenv("ANTHROPIC_WORKSPACE_ID", "wrkspc_test")
+    get_settings.cache_clear()
+
+    captured: dict = {}
+
+    class FakeAnthropic:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    import swarm.llm as llm_mod
+
+    monkeypatch.setitem(__import__("sys").modules, "anthropic", type("m", (), {"Anthropic": FakeAnthropic}))
+    llm = LLM(RunBudget(1.0))
+    assert captured["api_key"] == "sk-test"
+    assert captured["default_headers"]["anthropic-workspace-id"] == "wrkspc_test"
+    get_settings.cache_clear()
+
+
 def test_writer_failed_only_after_attempts():
     llm = LLM(RunBudget(0))
     assert llm.available is False

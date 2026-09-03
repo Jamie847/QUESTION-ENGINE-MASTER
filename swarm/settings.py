@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     dashboard_token: str = ""
     access_token: str = ""
     anthropic_api_key: str = ""
+    anthropic_workspace_id: str = ""
     anthropic_model: str = "claude-sonnet-5"
     judgment_model: str = "claude-fable-5"
     brave_api_key: str = ""

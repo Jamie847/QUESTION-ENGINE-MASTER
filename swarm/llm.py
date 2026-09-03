@@ -146,7 +146,13 @@ class LLM:
         if self.settings.anthropic_api_key:
             import anthropic
 
-            self._client = anthropic.Anthropic(api_key=self.settings.anthropic_api_key)
+            headers = {}
+            if self.settings.anthropic_workspace_id:
+                headers["anthropic-workspace-id"] = self.settings.anthropic_workspace_id
+            self._client = anthropic.Anthropic(
+                api_key=self.settings.anthropic_api_key,
+                default_headers=headers or None,
+            )
 
     @property
     def available(self) -> bool:

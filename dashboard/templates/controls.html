@@ -14,7 +14,16 @@
     volume {{ settings.anthropic_model }} ·
     judgment {{ settings.judgment_model }} ·
     {% if settings.anthropic_api_key %}Anthropic live{% else %}heuristic writer (no API key){% endif %}
+    {% if settings.anthropic_workspace_id %} · workspace set{% endif %}
   </p>
+  {% set latest = runs[0] if runs else none %}
+  {% if latest and latest.status == 'failed' %}
+  <p class="st-failed">
+    Latest run {{ latest.id }} failed in
+    {{ latest.current_stage or "an early stage" }}.
+    {{ latest.error or "No error stored." }}
+  </p>
+  {% endif %}
 </section>
 
 <section>
@@ -47,6 +56,7 @@
           {% for h in (r.source_health or []) %}
           <span class="pill {% if h.ok %}ok{% else %}bad{% endif %}">{{ h.source }} {{ h.count }}</span>
           {% endfor %}
+          {% if r.error %}<div class="muted">{{ r.error }}</div>{% endif %}
         </td>
       </tr>
       {% endfor %}
