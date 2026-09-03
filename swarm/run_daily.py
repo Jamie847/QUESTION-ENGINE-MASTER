@@ -222,6 +222,7 @@ def _execute(run_id: int) -> None:
             )
         _set_stage(run_id, StageName.archive)
         degraded = any(not h.ok for h in health) or any("degraded" in w for w in warnings)
+        warnings.append(f"writer_ok_calls={llm.successes}")
         if not llm.available:
             warnings.append("ANTHROPIC_API_KEY unset — heuristic writer used")
             degraded = True

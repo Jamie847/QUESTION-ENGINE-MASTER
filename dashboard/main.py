@@ -16,6 +16,7 @@ from swarm.config import lenses, verticals
 from swarm.db import init_db, ping_db, session_scope
 from swarm.dedup import sample_near_miss_pairs
 from swarm.lock import current_lock
+from swarm.staleness import digest_age_days, is_stale, last_run_label
 from swarm.models import Coverage, DecayClass, Question, QuestionStatus
 from swarm.orm import DigestRow, IntersectionRow, QuestionRow, RatingRow, RunRow
 from swarm.settings import get_settings
@@ -198,6 +199,8 @@ def today(request: Request):
         [_question_from_row(q) for q in curated],
         prior_curated,
     )
+    settings = get_settings()
+    age_days = digest_age_days(digest.date) if digest else None
     return templates.TemplateResponse(
         request,
         "today.html",
@@ -215,6 +218,11 @@ def today(request: Request):
             "question_count": len(questions),
             "near_miss": near_miss,
             "has_prior_day": bool(prior_curated),
+            "last_run_label": last_run_label(age_days) if age_days is not None else None,
+            "digest_stale": is_stale(age_days, settings.stale_after_days)
+            if age_days is not None
+            else False,
+            "stale_after_days": settings.stale_after_days,
         },
     )
 

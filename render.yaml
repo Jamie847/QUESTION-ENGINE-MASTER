@@ -39,6 +39,8 @@ envVarGroups:
         value: "400000"
       - key: SOURCE_TIMEOUT_SECONDS
         value: "45"
+      - key: STALE_AFTER_DAYS
+        value: "3"
       - key: PYTHON_VERSION
         value: "3.12.3"
 
@@ -63,7 +65,13 @@ services:
     runtime: python
     plan: starter
     region: oregon
-    schedule: "0 10 * * *"
+    # Manual-only (Operator 2026-09-03). Render requires `schedule` on type: cron
+    # (schema required: type, name, runtime, schedule). This is 00:00 UTC on
+    # 29 February — a leap-day — so it does not fire on a daily/weekly cadence.
+    # Do not replace this with a schedule that looks real. Suspend is not used:
+    # a suspended cron cannot be Trigger-Run'd. Keep this service so Dashboard
+    # Trigger Run and Controls → Run swarm now both still work.
+    schedule: "0 0 29 2 *"
     buildCommand: pip install -r requirements.txt
     startCommand: python -m swarm.run_daily
     envVars:

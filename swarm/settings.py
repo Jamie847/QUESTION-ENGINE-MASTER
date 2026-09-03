@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     )
     lock_stale_after_s: int = 7200
     dedup_lookback_days: int = 45
+    stale_after_days: int = 3
     dedup_threshold: float = 0.64
     user_agent: str = (
         "QuestionEngine/1.0 (personal research digest; +https://render.com)"

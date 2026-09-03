@@ -37,9 +37,41 @@ copy is the prior design record.
 
 ## 1. Concept
 
-Most trend tools summarize. This system interrogates. Every day it pulls signals across a
+Most trend tools summarize. This system interrogates. It pulls signals across a
 thin set of verticals, hunts for non-obvious intersections, and writes questions through
 three lenses. A curator kills anything generic. Ratings feed the next day's taste.
+
+### Run cadence — SUPERSEDED IN PLACE 2026-09-03 (WO-001)
+
+> **Was (v1.1 concept + autonomous-by-design):** a daily cron at 10:00 UTC. Spec
+> argument, still true and not deleted: *"A 10-minute morning approval step is the
+> kind of small friction that quietly kills daily habits. After-the-fact ratings
+> are a slightly weaker training signal, but a signal actually provided beats a
+> cleaner one that gets skipped."* A system you must remember to run is a system
+> you stop running. That risk now applies.
+
+**Cost check before the reversal (one real keyed run, 2026-09-03, $0.968, 13
+curated / 9 killed).** Daily ≈ $29/month API on top of Render. Alternatives that
+keep some habit:
+
+| Option | Monthly API cost | Keeps the daily habit? |
+|---|---|---|
+| Manual only (Operator asked) | Whatever you trigger | **No** |
+| Weekdays only (`0 10 * * 1-5`) | ~$21 | Yes |
+| 3×/week (`0 10 * * 1,3,5`) | ~$12 | Mostly |
+| Daily, cheaper judgment model | Lower per run | Yes |
+
+**Now:** the Operator chose **manual only**. The cron service stays (Render
+Trigger Run needs it). Its Blueprint `schedule` is `0 0 29 2 *` (29 February)
+because `schedule` is a required Blueprint field — this is not a daily job.
+Controls → Run swarm now stays. Today and the digest footer show **last run:
+N days ago** and mark the digest stale after `STALE_AFTER_DAYS` (default 3).
+Do not suspend the cron: a suspended cron cannot be Trigger-Run'd.
+
+Dependency, not this change: the web service still holds a multi-workspace
+Anthropic key unless `ANTHROPIC_WORKSPACE_ID` is set or the key is
+single-workspace. Controls 400s without that. Cron Trigger Run uses the same
+env group.
 
 ## 2. Architecture
 

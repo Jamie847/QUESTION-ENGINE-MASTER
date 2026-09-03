@@ -38,7 +38,7 @@ If the Anthropic key **is** set and every model call fails (a 400 is the usual c
 6. **Curator** — taste seed (later: weekly compressed profile + rotating exemplars).
 7. **Archivist** — markdown digest written to the database.
 
-`--resume <run_id>` continues from the last finished stage. `POST /api/run` is the manual trigger; a lock prevents overlap with the cron.
+`--resume <run_id>` continues from the last finished stage. Runs are **manual only**: Controls → Run swarm now (`POST /api/run`) or Render → cron service → Trigger Run. There is no daily schedule. The cron service stays so Trigger Run works; its Blueprint schedule is 29 February (Render requires a schedule field). A lock prevents overlap. Today and the digest footer show how old the last run is.
 
 ## Dashboard
 
@@ -55,7 +55,7 @@ If the Anthropic key **is** set and every model call fails (a 400 is the usual c
 |---|---|---|
 | Postgres | `question-engine-db` | Canonical store (digests, questions, ratings, run lock) |
 | Web | `question-engine-dashboard` | FastAPI UI, binds `0.0.0.0:$PORT`, health at `/healthz` |
-| Cron | `question-engine-swarm` | `python -m swarm.run_daily` at 10:00 UTC |
+| Cron | `question-engine-swarm` | Manual Trigger Run only. Schedule is `0 0 29 2 *` (leap-day) because Render requires a schedule. |
 
 ### Hand this to Claude Cowork (or apply it yourself)
 

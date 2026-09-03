@@ -96,6 +96,8 @@ def test_digest_includes_rejects_and_coverage():
     assert "does **not** catch paraphrase" in doc.markdown
     assert "Lexical duplicates marked: 0" in doc.markdown
     assert "No prior digest" in doc.markdown
+    assert "Last run:" in doc.markdown
+    assert "no daily cron" in doc.markdown
 
 
 def test_digest_near_miss_pairs_adjacent_days():

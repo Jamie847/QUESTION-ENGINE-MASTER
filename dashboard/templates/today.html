@@ -12,6 +12,13 @@
 
 <section class="lede">
   <p class="kicker">{{ digest.date }}{% if digest.degraded %} · degraded{% endif %}</p>
+  <p class="last-run {% if digest_stale %}stale{% endif %}">
+    {{ last_run_label }}
+    {% if digest_stale %}
+    · <strong>stale</strong> (older than {{ stale_after_days }} days). Trigger a run from
+    <a href="/controls">Controls</a>.
+    {% endif %}
+  </p>
   <h1>{{ digest.title }}</h1>
   <p class="meta-row">
     {{ digest.curated_count }} curated

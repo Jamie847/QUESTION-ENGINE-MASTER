@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import date
 
 from swarm.dedup import sample_near_miss_pairs
+from swarm.settings import get_settings
+from swarm.staleness import digest_age_days, is_stale, last_run_label
 from swarm.models import (
     Brief,
     DigestDoc,
@@ -25,6 +27,7 @@ def render_digest(
     degraded: bool,
     cost_usd: float,
     prior_questions: list[Question] | None = None,
+    as_of: date | None = None,
 ) -> DigestDoc:
     curated = sorted(
         [q for q in questions if q.status == QuestionStatus.curated],
@@ -139,8 +142,13 @@ def render_digest(
         for w in warnings:
             lines.append(f"- {w}")
         lines.append("")
+    age = digest_age_days(day, as_of=as_of)
+    stale = is_stale(age, get_settings().stale_after_days)
+    stale_note = " Digest is **stale**." if stale else ""
     lines.append(
-        f"_Run cost ≈ ${cost_usd:.2f}. Coverage is shown, never used as promotion. "
+        f"_{last_run_label(age).capitalize()}.{stale_note} "
+        f"Runs are manual — there is no daily cron. "
+        f"Run cost ≈ ${cost_usd:.2f}. Coverage is shown, never used as promotion. "
         f"Lexical duplicates marked: {len(duplicates)} of {len(questions)}. "
         f"That number counts token overlap only; it does not catch paraphrase._"
     )
