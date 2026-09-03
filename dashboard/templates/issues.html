@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Issues — Question Engine{% endblock %}
+{% block body %}
+<section class="lede">
+  <p class="kicker">The Correspondent</p>
+  <h1>A weekly essay from the week's best question.</h1>
+  <p>Drafts only. Nothing here is published. The daily digest is the input; this page is the output Jamie reviews.</p>
+</section>
+
+{% if not voice_ready %}
+<p class="last-run stale">Not in the Operator's voice — <code>content/voice.md</code> is still the empty template.</p>
+{% endif %}
+{% if not gate_open %}
+<p class="last-run stale">
+  Publish gate closed.
+  {% for r in gate_reasons %}{{ r }}{% if not loop.last %} {% endif %}{% endfor %}
+  Spec §6's no-approval rule is for the digest, not a newsletter with Jamie's name.
+</p>
+{% endif %}
+
+<section class="run-box">
+  <button type="button" id="issue-btn" class="primary">Draft this week's issue</button>
+  <p class="muted" id="issue-msg">
+    Reads the last 7 days of stored digests. No new fetch. One model call, or a grounded heuristic if there is no key.
+  </p>
+</section>
+
+<section>
+  <h2>Drafts</h2>
+  {% if not issues %}
+  <p class="muted">No drafts yet. Trigger one after a digest week exists.</p>
+  {% else %}
+  <table class="runs">
+    <thead>
+      <tr><th>Week ending</th><th>Selected by</th><th>Words</th><th>Voice</th><th>Gate</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+      {% for i in issues %}
+      <tr>
+        <td><a href="/issues/{{ i.week_ending }}">{{ i.week_ending }}</a></td>
+        <td>{{ i.selection_rule }}</td>
+        <td>{{ i.word_count }}</td>
+        <td>{% if i.voice_ready %}operator{% else %}house{% endif %}</td>
+        <td>{% if i.publish_gate_open %}would clear{% else %}closed{% endif %}</td>
+        <td class="st-degraded">{{ i.status }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+{% endblock %}

@@ -19,3 +19,12 @@ kills:
     question: What are the implications of AI in healthcare?
     why: Seminar title. No population, no mechanism.
 ```
+
+The Correspondent will not treat this file as filled until you write
+between the markers (or drop `taste/seed.yaml`). Do not ask an agent to
+do it.
+
+<!-- OPERATOR_TASTE_START -->
+
+<!-- OPERATOR_TASTE_END -->
+

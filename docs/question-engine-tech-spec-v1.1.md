@@ -220,6 +220,33 @@ read and rated.
 `duplicate_count`, `rejected_intersection_count`, `degraded`, `warnings`,
 `near_miss_pairs`. `GET /digest/{date}.md` renders `markdown`.
 
+### 3.9 The Correspondent (WO-003, 2026-09-03)
+
+A tenth agent. Writes **for a reader**, not for the system. Weekly. One question,
+essay-shaped, ~800 words as a target not a quota. Voice is Jamie's, AI-assisted
+and disclosed. Output is a **draft** (`issues` table, `/issues`, `GET /issues/{date}.md`).
+
+**Publish gate — do not "fix" this.** Spec §6 is correct for the private digest and
+wrong here. The newsletter carries the Operator's name. Do not ship an issue until
+`taste/seed.md` (or `taste/seed.yaml`) is Operator-filled **and** three ISO weeks of
+digests have Operator ratings. Even then there is **no publish path** — no Substack
+API, no email send, no `published` status. Getting a draft Jamie wants to paste is
+the milestone.
+
+**Selection:** last 7 days of stored curated questions. Prefer highest Operator
+rating; fall back to curator rank. The draft must state which rule chose it.
+
+**Fabrication:** every factual assertion traces to a persisted brief or source URL.
+The essay may reason freely; it may not assert freely. Short is allowed. "We don't
+know" is a valid ending. Numeric claims not in the grounding pack are stripped.
+
+**Trigger:** `python -m swarm.run_correspondent` or Issues → Draft this week's
+issue (`POST /api/issues`). Independent of the daily fetch. No new sources.
+
+**Re-trigger for format:** once resurrection (§3.7) ships and roughly a month of
+rated digests exists, put the serialized format back in front of the Operator
+("three weeks ago this system asked X; this week partly answered it; that opens Y").
+
 ---
 
 ## 4. Sources (Phase 1)

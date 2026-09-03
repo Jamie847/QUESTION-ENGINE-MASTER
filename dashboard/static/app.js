@@ -57,8 +57,43 @@ if (runBtn) {
   });
 }
 
+const issueBtn = document.getElementById("issue-btn");
+if (issueBtn) {
+  issueBtn.addEventListener("click", async () => {
+    issueBtn.disabled = true;
+    const msg = document.getElementById("issue-msg");
+    try {
+      await postJSON("/api/issues");
+      if (msg) msg.textContent = "Draft started. This page will pick up the new issue.";
+      pollIssueUntilIdle();
+    } catch (err) {
+      issueBtn.disabled = false;
+      if (msg) msg.textContent = err.message;
+    }
+  });
+}
+
 if (document.querySelector("[data-poll]")) {
   pollUntilIdle();
+}
+
+function pollIssueUntilIdle() {
+  const started = Date.now();
+  const tick = async () => {
+    try {
+      const st = await fetch("/api/issues/status").then((r) => r.json());
+      if (!st.running && Date.now() - started > 1500) {
+        window.location.reload();
+        return;
+      }
+    } catch (_) {
+      /* keep polling */
+    }
+    if (Date.now() - started < 15 * 60 * 1000) {
+      setTimeout(tick, 2500);
+    }
+  };
+  setTimeout(tick, 2500);
 }
 
 function pollUntilIdle() {

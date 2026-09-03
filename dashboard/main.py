@@ -16,17 +16,21 @@ from swarm.config import lenses, verticals
 from swarm.db import init_db, ping_db, session_scope
 from swarm.dedup import sample_near_miss_pairs
 from swarm.lock import current_lock
+from swarm.publish_gate import gate_reasons, publish_gate_open
 from swarm.staleness import digest_age_days, is_stale, last_run_label
 from swarm.models import Coverage, DecayClass, Question, QuestionStatus
-from swarm.orm import DigestRow, IntersectionRow, QuestionRow, RatingRow, RunRow
+from swarm.orm import DigestRow, IntersectionRow, IssueRow, QuestionRow, RatingRow, RunRow
 from swarm.settings import get_settings
 from swarm.taste import load_seed_profile
+from swarm.voice import voice_is_filled
 
 APP_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(APP_DIR / "templates"))
 
 _run_thread: threading.Thread | None = None
 _run_lock = threading.Lock()
+_issue_thread: threading.Thread | None = None
+_issue_lock = threading.Lock()
 
 
 @asynccontextmanager
@@ -320,6 +324,60 @@ def taste_page(request: Request):
     )
 
 
+@app.get("/issues", response_class=HTMLResponse)
+def issues_index(request: Request):
+    with session_scope() as session:
+        rows = list(session.scalars(select(IssueRow).order_by(IssueRow.week_ending.desc())).all())
+        for r in rows:
+            session.expunge(r)
+    return templates.TemplateResponse(
+        request,
+        "issues.html",
+        {
+            **_nav_ctx(request, "issues"),
+            "issues": rows,
+            "latest": rows[0] if rows else None,
+            "gate_open": publish_gate_open(),
+            "gate_reasons": gate_reasons(),
+            "voice_ready": voice_is_filled(),
+        },
+    )
+
+
+@app.get("/issues/{day}.md")
+def download_issue(day: str):
+    with session_scope() as session:
+        row = session.scalar(select(IssueRow).where(IssueRow.week_ending == day))
+        if not row:
+            raise HTTPException(404, "No issue draft for that week")
+        body = row.markdown
+    return PlainTextResponse(
+        body,
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="correspondent-{day}.md"'},
+    )
+
+
+@app.get("/issues/{day}", response_class=HTMLResponse)
+def issue_day(request: Request, day: str):
+    with session_scope() as session:
+        row = session.scalar(select(IssueRow).where(IssueRow.week_ending == day))
+        if not row:
+            raise HTTPException(404, "No issue draft for that week")
+        session.expunge(row)
+    return templates.TemplateResponse(
+        request,
+        "issue.html",
+        {
+            **_nav_ctx(request, "issues"),
+            "issue": row,
+            "gate_open": publish_gate_open(),
+            "gate_reasons": gate_reasons(),
+            "voice_ready": voice_is_filled(),
+        },
+    )
+
+
 @app.get("/controls", response_class=HTMLResponse)
 def controls(request: Request):
     with session_scope() as session:
@@ -425,6 +483,39 @@ def trigger_run(force: bool = Query(False)):
         _run_thread = threading.Thread(target=_target, daemon=True)
         _run_thread.start()
     return {"ok": True, "started": True}
+
+
+@app.post("/api/issues")
+def trigger_issue():
+    """Draft this week's Correspondent issue. Never publishes."""
+    global _issue_thread
+    if current_lock(name="correspondent") is not None:
+        raise HTTPException(409, "A Correspondent draft is already in progress")
+    with _issue_lock:
+        if _issue_thread and _issue_thread.is_alive():
+            raise HTTPException(409, "A Correspondent draft is already in progress")
+
+        def _target() -> None:
+            from swarm.run_correspondent import main as issue_main
+
+            issue_main(["--force"])
+
+        _issue_thread = threading.Thread(target=_target, daemon=True)
+        _issue_thread.start()
+    return {"ok": True, "started": True, "published": False}
+
+
+@app.get("/api/issues/status")
+def issue_status():
+    lock = current_lock(name="correspondent")
+    with session_scope() as session:
+        row = session.scalar(select(IssueRow).order_by(IssueRow.week_ending.desc()))
+        latest = row.week_ending if row else None
+    return {
+        "running": lock is not None or (_issue_thread is not None and _issue_thread.is_alive()),
+        "latest_issue": latest,
+        "published": False,
+    }
 
 
 @app.get("/api/status")
