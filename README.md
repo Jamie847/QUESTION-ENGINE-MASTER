@@ -32,7 +32,7 @@ If the Anthropic key **is** set and every model call fails (a 400 is the usual c
 - `ANTHROPIC_WORKSPACE_ID` — required if the key is identity-linked / multi-workspace (`wrkspc_…`). A key scoped to one workspace does not need it.
 - Dedup is **lexical** (no Voyage, no pgvector). `/healthz` reports `pgvector_installed: false` on purpose. See `docs/CP-RULING-dedup.md`.
 
-`DASHBOARD_TOKEN` is required in production (`generateValue: true` in the Blueprint). An empty token **locks** the dashboard — it is not an unlock. Local convenience is `ALLOW_UNAUTHENTICATED=true`, which is absent on Render and logged on boot. `POST /api/run` and `POST /api/issues` still require the token whenever one is set. Open `?token=…` once.
+`DASHBOARD_TOKEN` is required in production (`generateValue: true` in the Blueprint). An empty token **locks** the dashboard — it is not an unlock. Only `/health` and `/healthz` are public; every other registered route is 401 without the token. Local convenience is `ALLOW_UNAUTHENTICATED=true`, which is absent on Render and logged on boot. `POST /api/run` and `POST /api/issues` still require the token whenever one is set. Open `?token=…` once.
 
 ## Daily pipeline
 

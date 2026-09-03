@@ -35,10 +35,11 @@ _run_lock = threading.Lock()
 _issue_thread: threading.Thread | None = None
 _issue_lock = threading.Lock()
 
-# Spend paths always require the token when one is configured, even if
-# pages were opened another way. Finding 004: the run button is what costs
-# money. ALLOW_UNAUTHENTICATED unlocks local pages; it does not unlock spend
-# unless no token is configured at all (local, no secret).
+# Deny by default. A route added next month is locked unless it is listed
+# here. Finding 004: do not infer coverage from a handful of spot checks.
+PUBLIC_PATHS = {"/health", "/healthz"}
+# Spend always needs the token when one is set, even if pages were opened
+# with ALLOW_UNAUTHENTICATED. The button is what costs money.
 _SPEND_PATHS = {"/api/run", "/api/issues"}
 
 
@@ -91,11 +92,16 @@ app = FastAPI(title="Question Engine", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=str(APP_DIR / "static")), name="static")
 
 
+def _is_public(path: str) -> bool:
+    cleaned = path.rstrip("/") or "/"
+    return cleaned in PUBLIC_PATHS or path in PUBLIC_PATHS
+
+
 @app.middleware("http")
 async def access_gate(request: Request, call_next):
     settings = get_settings()
     path = request.url.path
-    if path in {"/health", "/healthz"}:
+    if _is_public(path):
         return await call_next(request)
 
     token = settings.auth_token
@@ -106,10 +112,12 @@ async def access_gate(request: Request, call_next):
     if not token and not settings.allow_unauthenticated:
         return _locked_html()
 
-    if spend and token and provided != token:
-        return _locked_html()
-
-    if not spend and not settings.allow_unauthenticated and provided != token:
+    # Spend: token required whenever one exists. The local unlock flag
+    # opens pages, not spend. Empty token + flag is the test/dev path.
+    if spend:
+        if token and provided != token:
+            return _locked_html()
+    elif not settings.allow_unauthenticated and (not token or provided != token):
         return _locked_html()
 
     response = await call_next(request)
