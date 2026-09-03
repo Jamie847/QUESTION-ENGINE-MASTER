@@ -273,10 +273,16 @@ count + the paraphrase caveat).
 door into the catalog. What promotion writes, and what an idea / spec is, lives in **§12**.
 Do not invent a pipeline mid-build from this line.
 
-Today, Archive, Taste, Controls. `/healthz` is unauthenticated and does not check the
+Today, Archive, Taste, Issues, Controls. `/healthz` is unauthenticated and does not check the
 dashboard token. `pgvector_installed` is `false`. Taste shows lexical mark counts with
 the same caveat as the footer — a low number must not read as "working." A Pipeline
 page is not Phase 1; it is the first slice of §12, after the §12 greenlight conditions.
+
+**Auth — Finding 004 (2026-09-03).** `DASHBOARD_TOKEN` is the only control (spec §6 / §11).
+An empty value is **locked**, not open. `generateValue: true` in the Blueprint. Local
+unlock is `ALLOW_UNAUTHENTICATED=true`, absent in production, logged on boot.
+`POST /api/run` and `POST /api/issues` require the token whenever one is set, even if
+pages were opened another way. Do not set `value: ""` to make the URL convenient.
 
 ## 7. Stack — SUPERSEDED IN PLACE 2026-09-01 (§12, agent_calls) — amended same day (CW 001)
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+import re
 import threading
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -26,15 +28,61 @@ from swarm.voice import voice_is_filled
 
 APP_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(APP_DIR / "templates"))
+log = logging.getLogger("dashboard")
 
 _run_thread: threading.Thread | None = None
 _run_lock = threading.Lock()
 _issue_thread: threading.Thread | None = None
 _issue_lock = threading.Lock()
 
+# Spend paths always require the token when one is configured, even if
+# pages were opened another way. Finding 004: the run button is what costs
+# money. ALLOW_UNAUTHENTICATED unlocks local pages; it does not unlock spend
+# unless no token is configured at all (local, no secret).
+_SPEND_PATHS = {"/api/run", "/api/issues"}
+
+
+def _provided_token(request: Request) -> str:
+    return (
+        request.headers.get("authorization", "").removeprefix("Bearer ").strip()
+        or request.cookies.get("access_token")
+        or request.query_params.get("token")
+        or ""
+    )
+
+
+def _locked_html() -> HTMLResponse:
+    return HTMLResponse(
+        "<html><body style='font-family:serif;padding:3rem'>"
+        "<p>This digest is locked. Append <code>?token=…</code> once.</p>"
+        "</body></html>",
+        status_code=401,
+    )
+
+
+def _public_run_error(err: str) -> str:
+    if not err:
+        return ""
+    low = err.lower()
+    if "credit balance" in low or "too low" in low:
+        return "Model call failed (provider billing)."
+    return re.sub(r"req_[A-Za-z0-9]+", "req_…", err)
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    settings = get_settings()
+    if settings.allow_unauthenticated:
+        log.warning(
+            "ALLOW_UNAUTHENTICATED=true — pages are open. This flag must be "
+            "absent in production. Spend endpoints still require DASHBOARD_TOKEN "
+            "if one is set."
+        )
+    elif not settings.auth_token:
+        log.warning(
+            "DASHBOARD_TOKEN is empty and ALLOW_UNAUTHENTICATED is false. "
+            "The dashboard is locked (fail closed). Empty is not an unlock."
+        )
     init_db()
     yield
 
@@ -46,26 +94,26 @@ app.mount("/static", StaticFiles(directory=str(APP_DIR / "static")), name="stati
 @app.middleware("http")
 async def access_gate(request: Request, call_next):
     settings = get_settings()
+    path = request.url.path
+    if path in {"/health", "/healthz"}:
+        return await call_next(request)
+
     token = settings.auth_token
-    if not token:
-        return await call_next(request)
-    if request.url.path in {"/health", "/healthz"}:
-        return await call_next(request)
-    provided = (
-        request.headers.get("authorization", "").removeprefix("Bearer ").strip()
-        or request.cookies.get("access_token")
-        or request.query_params.get("token")
-        or ""
-    )
-    if provided != token:
-        return HTMLResponse(
-            "<html><body style='font-family:serif;padding:3rem'>"
-            "<p>This digest is locked. Append <code>?token=…</code> once.</p>"
-            "</body></html>",
-            status_code=401,
-        )
+    provided = _provided_token(request)
+    spend = path in _SPEND_PATHS and request.method == "POST"
+
+    # Empty token is locked unless local unlock is explicit.
+    if not token and not settings.allow_unauthenticated:
+        return _locked_html()
+
+    if spend and token and provided != token:
+        return _locked_html()
+
+    if not spend and not settings.allow_unauthenticated and provided != token:
+        return _locked_html()
+
     response = await call_next(request)
-    if request.query_params.get("token"):
+    if token and request.query_params.get("token") == token:
         response.set_cookie("access_token", token, httponly=True, samesite="lax")
     return response
 
@@ -385,6 +433,8 @@ def controls(request: Request):
             session.scalars(select(RunRow).order_by(RunRow.started_at.desc()).limit(8)).all()
         )
         for r in runs:
+            if r.error:
+                r.error = _public_run_error(r.error)
             session.expunge(r)
     lock = current_lock()
     return templates.TemplateResponse(

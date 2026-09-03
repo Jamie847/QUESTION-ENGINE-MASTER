@@ -25,10 +25,13 @@ envVarGroups:
         sync: false
       - key: PERPLEXITY_API_KEY
         sync: false
-      # Optional lock. Leave unset so the onrender URL opens and Run works.
-      # Set a value in the Dashboard only if you want ?token= again.
+      # Spec §6 shared token. Empty is not "unlocked" — it is the removal
+      # of the only control (CW Finding 004). generateValue restores the
+      # gate. sync: false so a later apply cannot blank it again.
+      # Local unlock is ALLOW_UNAUTHENTICATED=true, which is not set here.
       - key: DASHBOARD_TOKEN
-        value: ""
+        generateValue: true
+        sync: false
       - key: JUDGMENT_MODEL
         value: claude-fable-5
       - key: ANTHROPIC_MODEL

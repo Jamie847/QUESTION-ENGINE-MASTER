@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./question_engine.db"
     dashboard_token: str = ""
     access_token: str = ""
+    # Local convenience only. Absent in production. Empty DASHBOARD_TOKEN
+    # is not an unlock — it is a locked dashboard. Finding 004.
+    allow_unauthenticated: bool = False
     anthropic_api_key: str = ""
     anthropic_workspace_id: str = ""
     anthropic_model: str = "claude-sonnet-5"
