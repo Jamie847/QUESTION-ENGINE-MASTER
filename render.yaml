@@ -25,13 +25,16 @@ envVarGroups:
         sync: false
       - key: PERPLEXITY_API_KEY
         sync: false
-      # Spec §6 shared token. Empty is not "unlocked" — it is the removal
-      # of the only control (CW Finding 004). generateValue restores the
-      # gate. sync: false so a later apply cannot blank it again.
-      # Local unlock is ALLOW_UNAUTHENTICATED=true, which is not set here.
+      # Kept for DASHBOARD_AUTH=on. No generateValue — the Blueprint
+      # must not mint a string nobody uses. Do not set value: "".
       - key: DASHBOARD_TOKEN
-        generateValue: true
         sync: false
+      - key: DASHBOARD_AUTH
+        value: "off"
+      - key: MAX_RUNS_PER_DAY
+        value: "5"
+      - key: RUN_COOLDOWN_SECONDS
+        value: "600"
       - key: JUDGMENT_MODEL
         value: claude-fable-5
       - key: ANTHROPIC_MODEL

@@ -32,7 +32,7 @@ If the Anthropic key **is** set and every model call fails (a 400 is the usual c
 - `ANTHROPIC_WORKSPACE_ID` — required if the key is identity-linked / multi-workspace (`wrkspc_…`). A key scoped to one workspace does not need it.
 - Dedup is **lexical** (no Voyage, no pgvector). `/healthz` reports `pgvector_installed: false` on purpose. See `docs/CP-RULING-dedup.md`.
 
-`DASHBOARD_TOKEN` is required in production (`generateValue: true` in the Blueprint). An empty token **locks** the dashboard — it is not an unlock. Only `/health` and `/healthz` are public; every other registered route is 401 without the token. Local convenience is `ALLOW_UNAUTHENTICATED=true`, which is absent on Render and logged on boot. `POST /api/run` and `POST /api/issues` still require the token whenever one is set. Open `?token=…` once.
+The dashboard is open (`DASHBOARD_AUTH=off`). That is the intended posture (WO-005), not a defect. Spend is bounded by `RUN_BUDGET_USD` per run, `MAX_RUNS_PER_DAY` (default 5), and a per-IP cooldown on `POST /api/run`. Set `DASHBOARD_AUTH` to any other value to turn the token gate back on.
 
 ## Daily pipeline
 
@@ -72,7 +72,7 @@ If the Anthropic key **is** set and every model call fails (a 400 is the usual c
    - `ANTHROPIC_API_KEY` (required for a real digest)
    - `BRAVE_API_KEY` (required for Health and Business scouts)
    - `PERPLEXITY_API_KEY` (optional — leave blank)
-4. Open `https://question-engine-dashboard.onrender.com/controls?token=…` (the token is on the web service as `DASHBOARD_TOKEN`) and click **Run swarm now**.
+4. Open `https://question-engine-dashboard.onrender.com/controls` and click **Run swarm now**.
 5. Prove infra before trusting a digest: `GET /healthz` on the web service, and `python -m swarm.run_daily --healthcheck` on the cron (look for `CRON_HEALTHCHECK_PASS`).
 6. After the first deploy is live, trigger an immediate run from **Controls** (do not wait for 10:00 UTC). Check source health: Brave and HN should be up; Reddit may be DOWN — leave it.
 

@@ -86,9 +86,9 @@ Render:  cron (question-engine-swarm)  →  Postgres (question-engine-db)  ←  
 
 **Now:** Postgres plan is `0.1c-256mb`. Shared secrets live in env group
 `question-engine-shared`. `DATABASE_URL` is declared on **each** service via
-`fromDatabase` (env groups cannot hold service-property references). Auth token is
-`DASHBOARD_TOKEN` with `generateValue: true`; fallback if Render rejects that inside a
-group is `sync: false`. See `render.yaml`.
+`fromDatabase` (env groups cannot hold service-property references). Dashboard
+auth is `DASHBOARD_AUTH=off` (WO-005). `DASHBOARD_TOKEN` stays declared with
+`sync: false` and no generated value, for the off-switch only. See `render.yaml`.
 
 `JUDGMENT_MODEL=claude-fable-5`, `ANTHROPIC_MODEL=claude-sonnet-5`, `RUN_BUDGET_USD=5.00`,
 `RUN_TOKEN_CAP=400000`.
@@ -278,11 +278,12 @@ dashboard token. `pgvector_installed` is `false`. Taste shows lexical mark count
 the same caveat as the footer — a low number must not read as "working." A Pipeline
 page is not Phase 1; it is the first slice of §12, after the §12 greenlight conditions.
 
-**Auth — Finding 004 (2026-09-03).** `DASHBOARD_TOKEN` is the only control (spec §6 / §11).
-An empty value is **locked**, not open. `generateValue: true` in the Blueprint. Local
-unlock is `ALLOW_UNAUTHENTICATED=true`, absent in production, logged on boot.
-`POST /api/run` and `POST /api/issues` require the token whenever one is set, even if
-pages were opened another way. Do not set `value: ""` to make the URL convenient.
+**Auth — SUPERSEDED 2026-09-05 (WO-005).** The Operator chose a fully open
+dashboard, including `POST /api/run`. An unauthenticated page is the intended
+posture, not a defect. Do not re-add a token gate. The code remains behind
+`DASHBOARD_AUTH` (any value other than `off`). Compensating controls:
+`MAX_RUNS_PER_DAY`, per-IP cooldown, `RUN_BUDGET_USD`, provider bodies kept off
+the pages. Record: `docs/WO-005-remove-dashboard-auth.md`.
 
 ## 7. Stack — SUPERSEDED IN PLACE 2026-09-01 (§12, agent_calls) — amended same day (CW 001)
 

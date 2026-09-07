@@ -17,9 +17,12 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./question_engine.db"
     dashboard_token: str = ""
     access_token: str = ""
-    # Local convenience only. Absent in production. Empty DASHBOARD_TOKEN
-    # is not an unlock — it is a locked dashboard. Finding 004.
+    # Operator decision (WO-005): off by default. Any other value turns
+    # the token gate back on. ALLOW_UNAUTHENTICATED is only read then.
+    dashboard_auth: str = "off"
     allow_unauthenticated: bool = False
+    max_runs_per_day: int = 5
+    run_cooldown_seconds: int = 600
     anthropic_api_key: str = ""
     anthropic_workspace_id: str = ""
     anthropic_model: str = "claude-sonnet-5"
@@ -51,6 +54,10 @@ class Settings(BaseSettings):
     @property
     def auth_token(self) -> str:
         return self.dashboard_token or self.access_token
+
+    @property
+    def dashboard_auth_enabled(self) -> bool:
+        return self.dashboard_auth.strip().lower() not in {"", "off"}
 
     @property
     def budget_usd(self) -> float:
