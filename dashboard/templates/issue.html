@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}{{ issue.week_ending }} — The Correspondent{% endblock %}
+{% block body %}
+<section class="lede">
+  <p class="kicker">Draft · week ending {{ issue.week_ending }}</p>
+  <p class="last-run {% if not issue.voice_ready or not issue.publish_gate_open %}stale{% endif %}">
+    {{ issue.selection_note }}
+    {% if not issue.voice_ready %} · not in the Operator's voice{% endif %}
+    {% if not issue.publish_gate_open %} · publish gate closed{% endif %}
+  </p>
+  <h1>{{ issue.title }}</h1>
+  <p class="meta-row">
+    {{ issue.word_count }} words
+    · {{ issue.status }}
+    · <a class="dl" href="/issues/{{ issue.week_ending }}.md">Download .md</a>
+    · <a href="/issues">All drafts</a>
+  </p>
+</section>
+
+<article class="md">
+  <pre>{{ issue.markdown }}</pre>
+</article>
+{% endblock %}

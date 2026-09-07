@@ -19,6 +19,12 @@ uvicorn dashboard.main:app --host 0.0.0.0 --port 43417
 
 Open `http://127.0.0.1:43417`. The swarm runs without keys (Hacker News + Wikipedia; Reddit if the host allows it), but that path is a **heuristic fallback**. Do not judge question quality until `ANTHROPIC_API_KEY` and `BRAVE_API_KEY` are set — HN alone is too narrow for Health and Business, and the writer is template-shaped by design.
 
+```bash
+python -m swarm.run_correspondent   # draft this week's essay; never publishes
+```
+
+The Correspondent reads stored digests only. Fill `content/voice.md` yourself — an AI-written voice under Jamie's name is the same failure as an AI-written taste seed. Drafts stay drafts until the publish gate clears (Operator taste seed + three rated weeks), and even then there is no send path.
+
 If the Anthropic key **is** set and every model call fails (a 400 is the usual culprit: Claude 5 adaptive thinking plus a forced `tool_choice`), the run **fails closed**. It will not archive a template digest and pretend Fable wrote it. Cron logs will include the API error body.
 
 - `ANTHROPIC_MODEL` (default `claude-sonnet-5`) — scouts and smiths
@@ -26,7 +32,7 @@ If the Anthropic key **is** set and every model call fails (a 400 is the usual c
 - `ANTHROPIC_WORKSPACE_ID` — required if the key is identity-linked / multi-workspace (`wrkspc_…`). A key scoped to one workspace does not need it.
 - Dedup is **lexical** (no Voyage, no pgvector). `/healthz` reports `pgvector_installed: false` on purpose. See `docs/CP-RULING-dedup.md`.
 
-`DASHBOARD_TOKEN` is optional. Empty (the default on Render now) means the dashboard URL opens and **Run swarm now** works with no query string. Set a value only if you want the public URL locked.
+The dashboard is open (`DASHBOARD_AUTH=off`). That is the intended posture (WO-005), not a defect. Spend is bounded by `RUN_BUDGET_USD` per run, `MAX_RUNS_PER_DAY` (default 5), and a per-IP cooldown on `POST /api/run`. Set `DASHBOARD_AUTH` to any other value to turn the token gate back on.
 
 ## Daily pipeline
 
@@ -38,13 +44,14 @@ If the Anthropic key **is** set and every model call fails (a 400 is the usual c
 6. **Curator** — taste seed (later: weekly compressed profile + rotating exemplars).
 7. **Archivist** — markdown digest written to the database.
 
-`--resume <run_id>` continues from the last finished stage. `POST /api/run` is the manual trigger; a lock prevents overlap with the cron.
+`--resume <run_id>` continues from the last finished stage. Runs are **manual only**: Controls → Run swarm now (`POST /api/run`) or Render → cron service → Trigger Run. There is no daily schedule. The cron service stays so Trigger Run works; its Blueprint schedule is 29 February (Render requires a schedule field). A lock prevents overlap. Today and the digest footer show how old the last run is.
 
 ## Dashboard
 
 - **Today** — digest, 1–5★ ratings, promote-to-ideation, coverage flags, rejects, kill floor.
 - **Archive** — search/filter the question bank; per-day `.md` download.
 - **Taste** — seeded keep/kill exemplars, your ratings, and a lexical-duplicate count that is labeled as token overlap only.
+- **Issues** — The Correspondent. Weekly essay draft from the week's best question. Never auto-published. `GET /issues/{date}.md`.
 - **Controls** — manual run, source health, verticals/lenses.
 
 ## Deploy on Render
@@ -55,7 +62,7 @@ If the Anthropic key **is** set and every model call fails (a 400 is the usual c
 |---|---|---|
 | Postgres | `question-engine-db` | Canonical store (digests, questions, ratings, run lock) |
 | Web | `question-engine-dashboard` | FastAPI UI, binds `0.0.0.0:$PORT`, health at `/healthz` |
-| Cron | `question-engine-swarm` | `python -m swarm.run_daily` at 10:00 UTC |
+| Cron | `question-engine-swarm` | Manual Trigger Run only. Schedule is `0 0 29 2 *` (leap-day) because Render requires a schedule. |
 
 ### Hand this to Claude Cowork (or apply it yourself)
 
@@ -65,7 +72,7 @@ If the Anthropic key **is** set and every model call fails (a 400 is the usual c
    - `ANTHROPIC_API_KEY` (required for a real digest)
    - `BRAVE_API_KEY` (required for Health and Business scouts)
    - `PERPLEXITY_API_KEY` (optional — leave blank)
-4. Open `https://question-engine-dashboard.onrender.com/controls` and click **Run swarm now**. No token. If you later set `DASHBOARD_TOKEN`, append `?token=…` once.
+4. Open `https://question-engine-dashboard.onrender.com/controls` and click **Run swarm now**.
 5. Prove infra before trusting a digest: `GET /healthz` on the web service, and `python -m swarm.run_daily --healthcheck` on the cron (look for `CRON_HEALTHCHECK_PASS`).
 6. After the first deploy is live, trigger an immediate run from **Controls** (do not wait for 10:00 UTC). Check source health: Brave and HN should be up; Reddit may be DOWN — leave it.
 

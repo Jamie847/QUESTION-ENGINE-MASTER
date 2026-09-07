@@ -82,6 +82,17 @@ h2 {
   padding-top: 0.4rem;
   border-top: 1px solid var(--rule);
 }
+.last-run {
+  margin: 0 0 0.35rem;
+  font-size: 1.05rem;
+}
+.last-run.stale {
+  color: var(--accent);
+  font-weight: 600;
+  padding: 0.55rem 0.7rem;
+  border: 2px solid var(--accent);
+  background: #f8e6e1;
+}
 .kicker {
   font-family: "IBM Plex Mono", ui-monospace, monospace;
   font-size: 0.72rem;

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import threading
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -16,20 +17,57 @@ from swarm.config import lenses, verticals
 from swarm.db import init_db, ping_db, session_scope
 from swarm.dedup import sample_near_miss_pairs
 from swarm.lock import current_lock
+from swarm.publish_gate import gate_reasons, publish_gate_open
+from swarm.staleness import digest_age_days, is_stale, last_run_label
 from swarm.models import Coverage, DecayClass, Question, QuestionStatus
-from swarm.orm import DigestRow, IntersectionRow, QuestionRow, RatingRow, RunRow
+from swarm.orm import DigestRow, IntersectionRow, IssueRow, QuestionRow, RatingRow, RunRow
 from swarm.settings import get_settings
+from dashboard.public_text import public_page_text, public_run_error, public_warning
+from dashboard.run_limits import (
+    mark_accepted,
+    refuse_if_cooling_down,
+    refuse_if_over_ceiling,
+)
 from swarm.taste import load_seed_profile
+from swarm.voice import voice_is_filled
 
 APP_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(APP_DIR / "templates"))
+log = logging.getLogger("dashboard")
 
 _run_thread: threading.Thread | None = None
 _run_lock = threading.Lock()
+_issue_thread: threading.Thread | None = None
+_issue_lock = threading.Lock()
+
+PUBLIC_PATHS = {"/health", "/healthz"}
+_SPEND_PATHS = {"/api/run", "/api/issues"}
+_COOKIE_NAME = "access_token"
+
+
+def _provided_token(request: Request) -> str:
+    """Header, then query, then cookie. Query must beat a stale cookie."""
+    header = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
+    query = (request.query_params.get("token") or "").strip()
+    cookie = (request.cookies.get(_COOKIE_NAME) or "").strip()
+    return header or query or cookie
+
+
+def _unauthorized() -> HTMLResponse:
+    return HTMLResponse("Unauthorized", status_code=401)
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    settings = get_settings()
+    if settings.dashboard_auth_enabled:
+        log.info("DASHBOARD_AUTH=%s — token gate is on", settings.dashboard_auth)
+    else:
+        log.info(
+            "DASHBOARD_AUTH=off. MAX_RUNS_PER_DAY=%s RUN_COOLDOWN_SECONDS=%s",
+            settings.max_runs_per_day,
+            settings.run_cooldown_seconds,
+        )
     init_db()
     yield
 
@@ -38,30 +76,42 @@ app = FastAPI(title="Question Engine", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=str(APP_DIR / "static")), name="static")
 
 
+def _is_public(path: str) -> bool:
+    cleaned = path.rstrip("/") or "/"
+    return cleaned in PUBLIC_PATHS or path in PUBLIC_PATHS
+
+
 @app.middleware("http")
 async def access_gate(request: Request, call_next):
     settings = get_settings()
+    path = request.url.path
+
+    if not settings.dashboard_auth_enabled:
+        response = await call_next(request)
+        if _COOKIE_NAME in request.cookies:
+            response.delete_cookie(_COOKIE_NAME)
+        return response
+
+    if _is_public(path):
+        return await call_next(request)
+
     token = settings.auth_token
-    if not token:
-        return await call_next(request)
-    if request.url.path in {"/health", "/healthz"}:
-        return await call_next(request)
-    provided = (
-        request.headers.get("authorization", "").removeprefix("Bearer ").strip()
-        or request.cookies.get("access_token")
-        or request.query_params.get("token")
-        or ""
-    )
-    if provided != token:
-        return HTMLResponse(
-            "<html><body style='font-family:serif;padding:3rem'>"
-            "<p>This digest is locked. Append <code>?token=…</code> once.</p>"
-            "</body></html>",
-            status_code=401,
-        )
+    provided = _provided_token(request)
+    spend = path in _SPEND_PATHS and request.method == "POST"
+
+    if not token and not settings.allow_unauthenticated:
+        return _unauthorized()
+
+    if spend:
+        if token and provided != token:
+            return _unauthorized()
+    elif not settings.allow_unauthenticated and (not token or provided != token):
+        return _unauthorized()
+
     response = await call_next(request)
-    if request.query_params.get("token"):
-        response.set_cookie("access_token", token, httponly=True, samesite="lax")
+    query_token = (request.query_params.get("token") or "").strip()
+    if token and query_token == token:
+        response.set_cookie(_COOKIE_NAME, token, httponly=True, samesite="lax")
     return response
 
 
@@ -198,6 +248,10 @@ def today(request: Request):
         [_question_from_row(q) for q in curated],
         prior_curated,
     )
+    settings = get_settings()
+    age_days = digest_age_days(digest.date) if digest else None
+    if digest and digest.warnings:
+        digest.warnings = [public_warning(str(w)) for w in digest.warnings]
     return templates.TemplateResponse(
         request,
         "today.html",
@@ -215,6 +269,11 @@ def today(request: Request):
             "question_count": len(questions),
             "near_miss": near_miss,
             "has_prior_day": bool(prior_curated),
+            "last_run_label": last_run_label(age_days) if age_days is not None else None,
+            "digest_stale": is_stale(age_days, settings.stale_after_days)
+            if age_days is not None
+            else False,
+            "stale_after_days": settings.stale_after_days,
         },
     )
 
@@ -312,6 +371,60 @@ def taste_page(request: Request):
     )
 
 
+@app.get("/issues", response_class=HTMLResponse)
+def issues_index(request: Request):
+    with session_scope() as session:
+        rows = list(session.scalars(select(IssueRow).order_by(IssueRow.week_ending.desc())).all())
+        for r in rows:
+            session.expunge(r)
+    return templates.TemplateResponse(
+        request,
+        "issues.html",
+        {
+            **_nav_ctx(request, "issues"),
+            "issues": rows,
+            "latest": rows[0] if rows else None,
+            "gate_open": publish_gate_open(),
+            "gate_reasons": gate_reasons(),
+            "voice_ready": voice_is_filled(),
+        },
+    )
+
+
+@app.get("/issues/{day}.md")
+def download_issue(day: str):
+    with session_scope() as session:
+        row = session.scalar(select(IssueRow).where(IssueRow.week_ending == day))
+        if not row:
+            raise HTTPException(404, "No issue draft for that week")
+        body = row.markdown
+    return PlainTextResponse(
+        body,
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="correspondent-{day}.md"'},
+    )
+
+
+@app.get("/issues/{day}", response_class=HTMLResponse)
+def issue_day(request: Request, day: str):
+    with session_scope() as session:
+        row = session.scalar(select(IssueRow).where(IssueRow.week_ending == day))
+        if not row:
+            raise HTTPException(404, "No issue draft for that week")
+        session.expunge(row)
+    return templates.TemplateResponse(
+        request,
+        "issue.html",
+        {
+            **_nav_ctx(request, "issues"),
+            "issue": row,
+            "gate_open": publish_gate_open(),
+            "gate_reasons": gate_reasons(),
+            "voice_ready": voice_is_filled(),
+        },
+    )
+
+
 @app.get("/controls", response_class=HTMLResponse)
 def controls(request: Request):
     with session_scope() as session:
@@ -319,6 +432,8 @@ def controls(request: Request):
             session.scalars(select(RunRow).order_by(RunRow.started_at.desc()).limit(8)).all()
         )
         for r in runs:
+            if r.error:
+                r.error = public_run_error(r.error)
             session.expunge(r)
     lock = current_lock()
     return templates.TemplateResponse(
@@ -341,7 +456,7 @@ def download_digest(day: str):
         row = session.scalar(select(DigestRow).where(DigestRow.date == day))
         if not row:
             raise HTTPException(404, "No digest for that date")
-        body = row.markdown
+        body = public_page_text(row.markdown)
     filename = f"question-engine-{day}.md"
     return PlainTextResponse(
         body,
@@ -357,8 +472,9 @@ def digest_day(request: Request, day: str):
         if not row:
             raise HTTPException(404, "No digest for that date")
         session.expunge(row)
-    # Reuse today template by temporarily pointing at this digest
-    # Simpler: redirect home if it's the latest, else show markdown page
+    row.markdown = public_page_text(row.markdown)
+    if row.warnings:
+        row.warnings = [public_warning(str(w)) for w in row.warnings]
     return templates.TemplateResponse(
         request,
         "digest.html",
@@ -401,8 +517,10 @@ def promote_question(question_id: str):
 
 
 @app.post("/api/run")
-def trigger_run(force: bool = Query(False)):
+def trigger_run(request: Request, force: bool = Query(False)):
     global _run_thread
+    refuse_if_over_ceiling()
+    refuse_if_cooling_down(request)
     if current_lock() is not None and not force:
         raise HTTPException(409, "A swarm run is already in progress")
     with _run_lock:
@@ -416,7 +534,41 @@ def trigger_run(force: bool = Query(False)):
 
         _run_thread = threading.Thread(target=_target, daemon=True)
         _run_thread.start()
+    mark_accepted(request)
     return {"ok": True, "started": True}
+
+
+@app.post("/api/issues")
+def trigger_issue():
+    """Draft this week's Correspondent issue. Never publishes."""
+    global _issue_thread
+    if current_lock(name="correspondent") is not None:
+        raise HTTPException(409, "A Correspondent draft is already in progress")
+    with _issue_lock:
+        if _issue_thread and _issue_thread.is_alive():
+            raise HTTPException(409, "A Correspondent draft is already in progress")
+
+        def _target() -> None:
+            from swarm.run_correspondent import main as issue_main
+
+            issue_main(["--force"])
+
+        _issue_thread = threading.Thread(target=_target, daemon=True)
+        _issue_thread.start()
+    return {"ok": True, "started": True, "published": False}
+
+
+@app.get("/api/issues/status")
+def issue_status():
+    lock = current_lock(name="correspondent")
+    with session_scope() as session:
+        row = session.scalar(select(IssueRow).order_by(IssueRow.week_ending.desc()))
+        latest = row.week_ending if row else None
+    return {
+        "running": lock is not None or (_issue_thread is not None and _issue_thread.is_alive()),
+        "latest_issue": latest,
+        "published": False,
+    }
 
 
 @app.get("/api/status")

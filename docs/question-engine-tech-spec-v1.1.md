@@ -37,9 +37,41 @@ copy is the prior design record.
 
 ## 1. Concept
 
-Most trend tools summarize. This system interrogates. Every day it pulls signals across a
+Most trend tools summarize. This system interrogates. It pulls signals across a
 thin set of verticals, hunts for non-obvious intersections, and writes questions through
 three lenses. A curator kills anything generic. Ratings feed the next day's taste.
+
+### Run cadence — SUPERSEDED IN PLACE 2026-09-03 (WO-001)
+
+> **Was (v1.1 concept + autonomous-by-design):** a daily cron at 10:00 UTC. Spec
+> argument, still true and not deleted: *"A 10-minute morning approval step is the
+> kind of small friction that quietly kills daily habits. After-the-fact ratings
+> are a slightly weaker training signal, but a signal actually provided beats a
+> cleaner one that gets skipped."* A system you must remember to run is a system
+> you stop running. That risk now applies.
+
+**Cost check before the reversal (one real keyed run, 2026-09-03, $0.968, 13
+curated / 9 killed).** Daily ≈ $29/month API on top of Render. Alternatives that
+keep some habit:
+
+| Option | Monthly API cost | Keeps the daily habit? |
+|---|---|---|
+| Manual only (Operator asked) | Whatever you trigger | **No** |
+| Weekdays only (`0 10 * * 1-5`) | ~$21 | Yes |
+| 3×/week (`0 10 * * 1,3,5`) | ~$12 | Mostly |
+| Daily, cheaper judgment model | Lower per run | Yes |
+
+**Now:** the Operator chose **manual only**. The cron service stays (Render
+Trigger Run needs it). Its Blueprint `schedule` is `0 0 29 2 *` (29 February)
+because `schedule` is a required Blueprint field — this is not a daily job.
+Controls → Run swarm now stays. Today and the digest footer show **last run:
+N days ago** and mark the digest stale after `STALE_AFTER_DAYS` (default 3).
+Do not suspend the cron: a suspended cron cannot be Trigger-Run'd.
+
+Dependency, not this change: the web service still holds a multi-workspace
+Anthropic key unless `ANTHROPIC_WORKSPACE_ID` is set or the key is
+single-workspace. Controls 400s without that. Cron Trigger Run uses the same
+env group.
 
 ## 2. Architecture
 
@@ -54,9 +86,9 @@ Render:  cron (question-engine-swarm)  →  Postgres (question-engine-db)  ←  
 
 **Now:** Postgres plan is `0.1c-256mb`. Shared secrets live in env group
 `question-engine-shared`. `DATABASE_URL` is declared on **each** service via
-`fromDatabase` (env groups cannot hold service-property references). Auth token is
-`DASHBOARD_TOKEN` with `generateValue: true`; fallback if Render rejects that inside a
-group is `sync: false`. See `render.yaml`.
+`fromDatabase` (env groups cannot hold service-property references). Dashboard
+auth is `DASHBOARD_AUTH=off` (WO-005). `DASHBOARD_TOKEN` stays declared with
+`sync: false` and no generated value, for the off-switch only. See `render.yaml`.
 
 `JUDGMENT_MODEL=claude-fable-5`, `ANTHROPIC_MODEL=claude-sonnet-5`, `RUN_BUDGET_USD=5.00`,
 `RUN_TOKEN_CAP=400000`.
@@ -188,6 +220,33 @@ read and rated.
 `duplicate_count`, `rejected_intersection_count`, `degraded`, `warnings`,
 `near_miss_pairs`. `GET /digest/{date}.md` renders `markdown`.
 
+### 3.9 The Correspondent (WO-003, 2026-09-03)
+
+A tenth agent. Writes **for a reader**, not for the system. Weekly. One question,
+essay-shaped, ~800 words as a target not a quota. Voice is Jamie's, AI-assisted
+and disclosed. Output is a **draft** (`issues` table, `/issues`, `GET /issues/{date}.md`).
+
+**Publish gate — do not "fix" this.** Spec §6 is correct for the private digest and
+wrong here. The newsletter carries the Operator's name. Do not ship an issue until
+`taste/seed.md` (or `taste/seed.yaml`) is Operator-filled **and** three ISO weeks of
+digests have Operator ratings. Even then there is **no publish path** — no Substack
+API, no email send, no `published` status. Getting a draft Jamie wants to paste is
+the milestone.
+
+**Selection:** last 7 days of stored curated questions. Prefer highest Operator
+rating; fall back to curator rank. The draft must state which rule chose it.
+
+**Fabrication:** every factual assertion traces to a persisted brief or source URL.
+The essay may reason freely; it may not assert freely. Short is allowed. "We don't
+know" is a valid ending. Numeric claims not in the grounding pack are stripped.
+
+**Trigger:** `python -m swarm.run_correspondent` or Issues → Draft this week's
+issue (`POST /api/issues`). Independent of the daily fetch. No new sources.
+
+**Re-trigger for format:** once resurrection (§3.7) ships and roughly a month of
+rated digests exists, put the serialized format back in front of the Operator
+("three weeks ago this system asked X; this week partly answered it; that opens Y").
+
 ---
 
 ## 4. Sources (Phase 1)
@@ -214,10 +273,17 @@ count + the paraphrase caveat).
 door into the catalog. What promotion writes, and what an idea / spec is, lives in **§12**.
 Do not invent a pipeline mid-build from this line.
 
-Today, Archive, Taste, Controls. `/healthz` is unauthenticated and does not check the
+Today, Archive, Taste, Issues, Controls. `/healthz` is unauthenticated and does not check the
 dashboard token. `pgvector_installed` is `false`. Taste shows lexical mark counts with
 the same caveat as the footer — a low number must not read as "working." A Pipeline
 page is not Phase 1; it is the first slice of §12, after the §12 greenlight conditions.
+
+**Auth — SUPERSEDED 2026-09-05 (WO-005).** The Operator chose a fully open
+dashboard, including `POST /api/run`. An unauthenticated page is the intended
+posture, not a defect. Do not re-add a token gate. The code remains behind
+`DASHBOARD_AUTH` (any value other than `off`). Compensating controls:
+`MAX_RUNS_PER_DAY`, per-IP cooldown, `RUN_BUDGET_USD`, provider bodies kept off
+the pages. Record: `docs/WO-005-remove-dashboard-auth.md`.
 
 ## 7. Stack — SUPERSEDED IN PLACE 2026-09-01 (§12, agent_calls) — amended same day (CW 001)
 

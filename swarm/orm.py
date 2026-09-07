@@ -176,3 +176,31 @@ class RunLockRow(Base):
     acquired_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+
+
+class IssueRow(Base):
+    """Correspondent draft. Always a draft. There is no published state.
+
+    Spec §6's no-approval rule is for the private digest. Do not add a
+    published_at column or a send path to 'finish' this table.
+    """
+
+    __tablename__ = "issues"
+    __table_args__ = (UniqueConstraint("week_ending", name="uq_issue_week"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    week_ending: Mapped[str] = mapped_column(String(16), index=True)
+    question_id: Mapped[str] = mapped_column(String(64), index=True)
+    selection_rule: Mapped[str] = mapped_column(String(32))
+    selection_note: Mapped[str] = mapped_column(Text, default="")
+    title: Mapped[str] = mapped_column(Text)
+    markdown: Mapped[str] = mapped_column(Text)
+    word_count: Mapped[int] = mapped_column(Integer, default=0)
+    voice_ready: Mapped[bool] = mapped_column(Boolean, default=False)
+    publish_gate_open: Mapped[bool] = mapped_column(Boolean, default=False)
+    status: Mapped[str] = mapped_column(String(16), default="draft")
+    warnings: Mapped[list[Any]] = mapped_column(JSONType, default=list)
+    source_urls: Mapped[list[Any]] = mapped_column(JSONType, default=list)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )

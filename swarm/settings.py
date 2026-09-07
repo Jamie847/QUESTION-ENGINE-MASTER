@@ -17,6 +17,12 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./question_engine.db"
     dashboard_token: str = ""
     access_token: str = ""
+    # Operator decision (WO-005): off by default. Any other value turns
+    # the token gate back on. ALLOW_UNAUTHENTICATED is only read then.
+    dashboard_auth: str = "off"
+    allow_unauthenticated: bool = False
+    max_runs_per_day: int = 5
+    run_cooldown_seconds: int = 600
     anthropic_api_key: str = ""
     anthropic_workspace_id: str = ""
     anthropic_model: str = "claude-sonnet-5"
@@ -35,6 +41,7 @@ class Settings(BaseSettings):
     )
     lock_stale_after_s: int = 7200
     dedup_lookback_days: int = 45
+    stale_after_days: int = 3
     dedup_threshold: float = 0.64
     user_agent: str = (
         "QuestionEngine/1.0 (personal research digest; +https://render.com)"
@@ -47,6 +54,10 @@ class Settings(BaseSettings):
     @property
     def auth_token(self) -> str:
         return self.dashboard_token or self.access_token
+
+    @property
+    def dashboard_auth_enabled(self) -> bool:
+        return self.dashboard_auth.strip().lower() not in {"", "off"}
 
     @property
     def budget_usd(self) -> float:

@@ -1,4 +1,5 @@
 from swarm.agents.archivist import render_digest
+from swarm.agents.correspondent import write_issue
 from swarm.agents.cross_pollinator import run_cross_pollinator
 from swarm.agents.curator import run_curator
 from swarm.agents.scout import run_scouts
@@ -10,4 +11,5 @@ __all__ = [
     "run_curator",
     "run_scouts",
     "run_smiths",
+    "write_issue",
 ]
