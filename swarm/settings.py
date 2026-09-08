@@ -49,6 +49,9 @@ class Settings(BaseSettings):
     reddit_user_agent: str = (
         "python:question-engine:1.0 (by /u/QuestionEngine; personal research digest)"
     )
+    reddit_client_id: str = ""
+    reddit_client_secret: str = ""
+    source_dead_after_runs: int = 3
 
     @computed_field  # type: ignore[prop-decorator]
     @property

@@ -36,7 +36,7 @@ The dashboard is open (`DASHBOARD_AUTH=off`). That is the intended posture (WO-0
 
 ## Daily pipeline
 
-1. **Fetch** — Brave (if keyed), HN, Reddit, Wikipedia. A dead source degrades the run; it does not abort it.
+1. **Fetch** — Brave (if keyed), HN, Reddit (OAuth), Wikipedia, Federal Register. A dead source (N consecutive zeros) is named **dead**, not quiet. It does not abort the run. No Perplexity.
 2. **Scout** — one pass per enabled vertical → structured briefs.
 3. **Cross-pollinator** — intersections with surprise, plausibility, and a **coverage** score (`none` / `thin` / `crowded` / `unknown`). Coverage is visible. It cannot promote a question. Rejected pairings are persisted.
 4. **Smiths** — one lens each.
@@ -44,7 +44,7 @@ The dashboard is open (`DASHBOARD_AUTH=off`). That is the intended posture (WO-0
 6. **Curator** — taste seed (later: weekly compressed profile + rotating exemplars).
 7. **Archivist** — markdown digest written to the database.
 
-`--resume <run_id>` continues from the last finished stage. Runs are **manual only**: Controls → Run swarm now (`POST /api/run`) or Render → cron service → Trigger Run. There is no daily schedule. The cron service stays so Trigger Run works; its Blueprint schedule is 29 February (Render requires a schedule field). A lock prevents overlap. Today and the digest footer show how old the last run is.
+`--resume <run_id>` continues from the last finished stage. Runs are **manual only until the Operator rates the five existing digests** (CP 2026-09-08). After that the weekday cron is `0 10 * * 1-5`. Until then the Blueprint schedule stays 29 February (Render requires a schedule field). Both manual paths stay: Controls → Run swarm now (`POST /api/run`) and Render → cron → Trigger Run. A lock prevents overlap. Digests are unique per **run**, not per date — a second same-day click keeps the first digest. Today and the digest footer show how old the last run is.
 
 ## Dashboard
 
@@ -71,7 +71,8 @@ The dashboard is open (`DASHBOARD_AUTH=off`). That is the intended posture (WO-0
 3. When prompted, paste:
    - `ANTHROPIC_API_KEY` (required for a real digest)
    - `BRAVE_API_KEY` (required for Health and Business scouts)
-   - `PERPLEXITY_API_KEY` (optional — leave blank)
+   - `REDDIT_CLIENT_ID` / `REDDIT_CLIENT_SECRET` (application-only OAuth; without them Reddit errors instead of returning a silent zero)
+   - Leave `PERPLEXITY_API_KEY` blank. CP ruled no Perplexity.
 4. Open `https://question-engine-dashboard.onrender.com/controls` and click **Run swarm now**.
 5. Prove infra before trusting a digest: `GET /healthz` on the web service, and `python -m swarm.run_daily --healthcheck` on the cron (look for `CRON_HEALTHCHECK_PASS`).
 6. After the first deploy is live, trigger an immediate run from **Controls** (do not wait for 10:00 UTC). Check source health: Brave and HN should be up; Reddit may be DOWN — leave it.

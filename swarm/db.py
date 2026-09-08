@@ -39,6 +39,87 @@ def get_engine() -> Engine:
 def init_db() -> None:
     engine = get_engine()
     Base.metadata.create_all(engine)
+    _migrate_digest_uniqueness(engine)
+
+
+def _migrate_digest_uniqueness(engine: Engine) -> None:
+    """Date-unique digests silently replaced a same-day run. One digest per run."""
+    with engine.begin() as conn:
+        if engine.dialect.name == "postgresql":
+            conn.execute(text("ALTER TABLE digests DROP CONSTRAINT IF EXISTS uq_digest_date"))
+            conn.execute(
+                text("CREATE UNIQUE INDEX IF NOT EXISTS uq_digest_run ON digests (run_id)")
+            )
+            return
+        tables = {
+            row[0]
+            for row in conn.execute(
+                text("SELECT name FROM sqlite_master WHERE type='table'")
+            )
+        }
+        if "digests_old_date_unique" in tables:
+            if "digests" in tables:
+                conn.execute(text("DROP TABLE IF EXISTS digests_old_date_unique"))
+            else:
+                conn.execute(text("ALTER TABLE digests_old_date_unique RENAME TO digests"))
+        indexes = conn.execute(text("PRAGMA index_list('digests')")).mappings().all()
+        names = {str(row["name"]) for row in indexes}
+        if "uq_digest_date" in names:
+            conn.execute(text("DROP INDEX IF EXISTS uq_digest_date"))
+        date_unique = False
+        for idx in indexes:
+            if not idx.get("unique"):
+                continue
+            cols = conn.execute(
+                text(f"PRAGMA index_info('{idx['name']}')")
+            ).mappings().all()
+            if [c.get("name") for c in cols] == ["date"]:
+                date_unique = True
+        schema = conn.execute(
+            text("SELECT sql FROM sqlite_master WHERE type='table' AND name='digests'")
+        ).scalar()
+        normalized = (schema or "").replace(" ", "").lower()
+        if date_unique or "unique(date)" in normalized:
+            conn.execute(text("ALTER TABLE digests RENAME TO digests_old_date_unique"))
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE digests (
+                        id INTEGER NOT NULL PRIMARY KEY,
+                        run_id INTEGER NOT NULL,
+                        date VARCHAR(16) NOT NULL,
+                        title TEXT NOT NULL,
+                        markdown TEXT NOT NULL,
+                        top_ids JSON,
+                        curated_count INTEGER,
+                        killed_count INTEGER,
+                        rejected_intersection_count INTEGER,
+                        degraded BOOLEAN,
+                        warnings JSON,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE (run_id)
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO digests (
+                        id, run_id, date, title, markdown, top_ids,
+                        curated_count, killed_count, rejected_intersection_count,
+                        degraded, warnings, created_at
+                    )
+                    SELECT
+                        id, run_id, date, title, markdown, top_ids,
+                        curated_count, killed_count, rejected_intersection_count,
+                        degraded, warnings, created_at
+                    FROM digests_old_date_unique
+                    """
+                )
+            )
+            conn.execute(text("DROP TABLE digests_old_date_unique"))
+        conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_digest_run ON digests (run_id)"))
 
 
 @contextmanager

@@ -2,10 +2,10 @@
 {% block title %}{{ digest.date }} — Question Engine{% endblock %}
 {% block body %}
 <section class="lede">
-  <p class="kicker">{{ digest.date }}</p>
+  <p class="kicker">{{ digest.date }} · run {{ digest.run_id }}</p>
   <h1>{{ digest.title }}</h1>
   <p class="meta-row">
-    <a class="dl" href="/digest/{{ digest.date }}.md">Download .md</a>
+    <a class="dl" href="/digest/run/{{ digest.run_id }}.md">Download .md</a>
     · <a href="/">Back to today</a>
   </p>
 </section>

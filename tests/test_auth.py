@@ -36,6 +36,8 @@ def _reload(**env: str) -> TestClient:
     get_settings.cache_clear()
     reset_for_tests()
     init_db()
+    release_lock("daily")
+    release_lock("correspondent")
     return TestClient(app)
 
 
@@ -57,7 +59,11 @@ def _iter_routes():
         methods = getattr(route, "methods", None)
         if not path:
             continue
-        concrete = path.replace("{day}", "2026-01-01").replace("{question_id}", "q")
+        concrete = (
+            path.replace("{day}", "2026-01-01")
+            .replace("{question_id}", "q")
+            .replace("{run_id}", "1")
+        )
         if concrete.startswith("/static"):
             concrete = "/static/style.css"
         for method in sorted(methods or {"GET"}):

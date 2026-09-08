@@ -48,6 +48,7 @@ class RunRow(Base):
     intersections: Mapped[list[IntersectionRow]] = relationship(back_populates="run")
     questions: Mapped[list[QuestionRow]] = relationship(back_populates="run")
     digest: Mapped[DigestRow | None] = relationship(back_populates="run")
+    agent_calls: Mapped[list["AgentCallRow"]] = relationship(back_populates="run")
 
 
 class SignalRow(Base):
@@ -148,7 +149,7 @@ class RatingRow(Base):
 
 class DigestRow(Base):
     __tablename__ = "digests"
-    __table_args__ = (UniqueConstraint("date", name="uq_digest_date"),)
+    __table_args__ = (UniqueConstraint("run_id", name="uq_digest_run"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     run_id: Mapped[int] = mapped_column(ForeignKey("runs.id"), index=True)
@@ -166,6 +167,45 @@ class DigestRow(Base):
     )
 
     run: Mapped[RunRow] = relationship(back_populates="digest")
+
+
+class AgentCallRow(Base):
+    """One row per LLM call. Spec §7 / §10 Phase 1. CP 2026-09-08."""
+
+    __tablename__ = "agent_calls"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    run_id: Mapped[int] = mapped_column(ForeignKey("runs.id"), index=True)
+    agent: Mapped[str] = mapped_column(String(64), index=True, default="")
+    model: Mapped[str] = mapped_column(String(128), default="")
+    ok: Mapped[bool] = mapped_column(Boolean, default=False)
+    input_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    output_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    latency_ms: Mapped[int] = mapped_column(Integer, default=0)
+    error: Mapped[str] = mapped_column(Text, default="")
+    input_text: Mapped[str] = mapped_column(Text, default="")
+    output_text: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    run: Mapped[RunRow] = relationship(back_populates="agent_calls")
+
+
+class KillReasonRow(Base):
+    """Labelled curator kills. A rendered page is not a corpus."""
+
+    __tablename__ = "kill_reasons"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    question_id: Mapped[str] = mapped_column(String(64), index=True)
+    run_id: Mapped[int] = mapped_column(Integer, index=True)
+    label: Mapped[str] = mapped_column(String(64), index=True, default="other")
+    reason: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
 
 class RunLockRow(Base):

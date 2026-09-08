@@ -61,12 +61,24 @@ keep some habit:
 | 3×/week (`0 10 * * 1,3,5`) | ~$12 | Mostly |
 | Daily, cheaper judgment model | Lower per run | Yes |
 
-**Now:** the Operator chose **manual only**. The cron service stays (Render
-Trigger Run needs it). Its Blueprint `schedule` is `0 0 29 2 *` (29 February)
-because `schedule` is a required Blueprint field — this is not a daily job.
-Controls → Run swarm now stays. Today and the digest footer show **last run:
-N days ago** and mark the digest stale after `STALE_AFTER_DAYS` (default 3).
-Do not suspend the cron: a suspended cron cannot be Trigger-Run'd.
+**Now (WO-001, 2026-09-03):** the Operator chose **manual only**. The cron
+service stays (Render Trigger Run needs it). Its Blueprint `schedule` is
+`0 0 29 2 *` (29 February) because `schedule` is a required Blueprint field —
+this is not a daily job. Controls → Run swarm now stays. Today and the digest
+footer show **last run: N days ago** and mark the digest stale after
+`STALE_AFTER_DAYS` (default 3). Do not suspend the cron: a suspended cron
+cannot be Trigger-Run'd.
+
+### Run cadence — SUPERSEDED IN PLACE 2026-09-08 (CP ruling)
+
+> **Was (WO-001):** stay manual-only. Leap-day cron until someone changes it.
+
+**Now:** uniqueness first; the Operator rates the five existing digests; **then**
+weekday `0 10 * * 1-5`. Not daily. Daily may follow if the ratings justify it.
+The leap-day expression stays until that third step. Staleness work stands.
+`DigestRow` is unique on `run_id`, not `date` — a second same-day Run click
+must not replace the first digest. Record:
+`docs/CP-RULING-cadence-sources-defects.md`.
 
 Dependency, not this change: the web service still holds a multi-workspace
 Anthropic key unless `ANTHROPIC_WORKSPACE_ID` is set or the key is
@@ -103,7 +115,7 @@ All agents return Pydantic models. Stages checkpoint to Postgres before the next
 ### 3.0 Pipeline (Phase 1)
 
 ```
-[1] Fetch (Brave, HN, Reddit, Wikipedia)
+[1] Fetch (Brave, HN, Reddit, Wikipedia, Federal Register)
         ▼
 [2] Scouts (one pass per enabled vertical)
         ▼
@@ -126,9 +138,14 @@ smiths. Never hardcode a model string.
 
 ### 3.1 Sources
 
-Adapters implement `fetch() -> list[Signal]`. A dead source **degrades** the run; it does
-not abort it. Reddit 403 from a datacenter is expected. The test is that the run
-completes and the footer names the source, not that Reddit works.
+Adapters implement `fetch() -> list[Signal]`. A failed source **degrades** the run; it
+does not abort it. A source at zero for `SOURCE_DEAD_AFTER_RUNS` consecutive runs
+(default 3) is **dead**, not quiet. The flag clears the moment the source returns
+anything. Reddit empty is an error, not a silent zero — OAuth via
+`REDDIT_CLIENT_ID` / `REDDIT_CLIENT_SECRET`. Federal Register is in the fetch
+list (no key). Regulations.gov is next. **No Perplexity.** If a second general
+web search is ever wanted: Parallel, not a synthesizer. Dedup stays lexical
+(2026-09-01); more sources do not reopen embeddings.
 
 ### 3.2 Coverage
 
@@ -312,19 +329,15 @@ the pages. Record: `docs/WO-005-remove-dashboard-auth.md`.
 > `cost_usd`, `warnings`, `source_health`. Not model, prompt version, tokens,
 > latency, or I/O per call.
 
-**Now — disposition (a), justification amended:** add `agent_calls` **with the
-catalog**. The requirement was specified for Phase 1. The build does not have it.
-We are deferring an unimplemented Phase-1 requirement to the catalog ship — we are
-not recording that it was never specified. Ideator and spec-writer each produce an
-object the Operator acts on; those are the calls that must be traceable, and they
-are the natural moment to add the table. Swarm stages may start writing the same
-table then. Checkpoints remain resume machinery. See §12.4. Do not promote
-checkpoints to fill this role.
+**Now — 2026-09-08 CP ruling:** `agent_calls` is Phase 1 and is built. The
+catalog deferral is withdrawn. Checkpoints remain resume machinery; they do not
+stand in for per-call I/O. See `docs/CP-RULING-cadence-sources-defects.md`.
 
 Python 3.12 · FastAPI + Jinja2 · SQLAlchemy · SQLite locally / Render Postgres ·
 Anthropic API only. Tables that exist today: `runs`, `signals`, `briefs`,
-`intersections`, `questions`, `ratings`, `digests`, `run_locks`. Fail loud; never
-silent-fallback. A degraded source is named, not swallowed.
+`intersections`, `questions`, `ratings`, `digests`, `run_locks`, `agent_calls`,
+`kill_reasons`. Fail loud; never silent-fallback. A dead source is named **dead**,
+not swallowed as a quiet zero.
 
 ## 8. Metrics — SUPERSEDED IN PLACE 2026-09-01
 
@@ -349,18 +362,18 @@ stages; it does not fail the run.
 > logging, email delivery of Top 5."* `agent_calls` logging was a Phase-1 item,
 > not a later phase.
 
-**Now:** the milestone is still a digest Jamie wants to open on day 3. Run lock
-and budget cap exist. Email does not. `agent_calls` logging does not — it is a
-Phase-1 gap deferred to the catalog ship (§7 / §12.4), not dropped from the
-record. Not a second scaffold. Not Voyage.
+**Now — 2026-09-08:** the milestone is still a digest Jamie wants to open.
+Run lock and budget cap exist. `agent_calls` logging exists (one row per
+`LLM.complete_json`). Email does not. Kill reasons are labelled rows, not
+page copy. Catalog and focus runs stay sequenced behind five ratings.
+Not a second scaffold. Not Voyage.
 
 ## 11. Explicitly not yet
 
 Embeddings-as-a-service. pgvector. Ideator (held — contract in §12, no build until
 §12.8). Resurrection. Weekly taste compressor. Eval harness. Extra verticals/lenses.
 GitHub-committed digests (Render disk is ephemeral; the DB is the archive).
-`agent_calls` (held — added with the catalog, §7 / §12.4). Pipeline page, idea
-cards, spec-writer (held — §12).
+Pipeline page, idea cards, spec-writer (held — §12).
 
 ## 12. Catalog & Pipeline (the second object)
 
@@ -501,14 +514,10 @@ accepts. No status, no card.
 
 ### 12.4 `agent_calls` — disposition (a)
 
-The project-copy spec required this table in Phase 1. The table does not exist.
-That is a Phase-1 gap. Stage checkpoints are not a substitute (see §7). Add
-`agent_calls` **with this catalog** — a deferral of an unimplemented requirement,
-not a claim it was unspecified. Each ideator call and each spec-writer call
-writes a row: stage, model, prompt version, tokens, cost, latency, input/output
-JSON, and the `idea_id` / `spec_id` acted on. Swarm stages may start writing the
-same table when the catalog ships; until then, do not pretend per-call
-observability exists.
+The project-copy spec required this table in Phase 1. **Swarm writes it as of
+2026-09-08** (CP pulled the deferral forward). Stage checkpoints are still not a
+substitute. Catalog ideator / spec-writer rows (`idea_id` / `spec_id`) remain
+catalog-gated and are not built here.
 
 ### 12.5 First slice (build target, after §12.8)
 

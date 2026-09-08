@@ -25,7 +25,7 @@
     · {{ digest.killed_count }} killed
     · {{ duplicate_count }} lexical duplicates
     · {{ digest.rejected_intersection_count }} intersections passed over
-    <a class="dl" href="/digest/{{ digest.date }}.md">Download .md</a>
+    <a class="dl" href="/digest/run/{{ digest.run_id }}.md">Download .md</a>
   </p>
   <p class="hint">Lexical duplicate count is token overlap only. It does not catch paraphrase, and a low number is not evidence that dedup worked.</p>
   {% if digest.warnings %}

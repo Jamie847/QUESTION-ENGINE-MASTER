@@ -132,10 +132,18 @@ def render_digest(
 
     lines += ["## Source health", ""]
     for h in health:
-        mark = "ok" if h.ok else "DOWN"
+        if h.dead:
+            mark = "dead"
+        elif h.ok:
+            mark = "ok"
+        else:
+            mark = "DOWN"
         extra = f" — {h.error}" if h.error else ""
         skip = " (skipped)" if h.error == "skipped" else ""
-        lines.append(f"- {h.source}: {mark}, {h.count} signals, {h.elapsed_ms}ms{skip}{extra}")
+        last = f", last ok {h.last_ok}" if h.last_ok and h.dead else ""
+        lines.append(
+            f"- {h.source}: {mark}, {h.count} signals, {h.elapsed_ms}ms{skip}{extra}{last}"
+        )
     lines.append("")
     if warnings:
         lines += ["## Warnings", ""]

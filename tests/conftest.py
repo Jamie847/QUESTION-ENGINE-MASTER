@@ -1,6 +1,8 @@
 import os
 from pathlib import Path
 
+import pytest
+
 # Isolate tests from a developer's local digest database.
 os.environ.setdefault("DATABASE_URL", "sqlite:///" + str(Path.cwd() / "test_question_engine.db"))
 # WO-005: dashboard is open. Suite posts to /api/run without a token.
@@ -11,3 +13,21 @@ os.environ.setdefault("RUN_COOLDOWN_SECONDS", "0")
 from swarm.settings import get_settings
 
 get_settings.cache_clear()
+
+
+def _release_shared_locks() -> None:
+    try:
+        from swarm.lock import release_lock
+
+        release_lock("daily")
+        release_lock("correspondent")
+    except Exception:
+        pass
+
+
+@pytest.fixture(autouse=True)
+def _isolate_shared_sqlite_locks():
+    """Manual-run tests leave `daily` held; auth tests then 409 as LockBusy."""
+    _release_shared_locks()
+    yield
+    _release_shared_locks()

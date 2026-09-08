@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
 from typing import Any
 
 from swarm.budget import RunBudget
@@ -143,6 +144,8 @@ class LLM:
         self.successes = 0
         self.failures = 0
         self.last_error = ""
+        self.run_id = 0
+        self.agent = ""
         if self.settings.anthropic_api_key:
             import anthropic
 
@@ -195,35 +198,108 @@ class LLM:
             judgment=judgment,
         )
         self.attempts += 1
+        started = time.perf_counter()
         try:
             msg = self._create(kwargs)
         except Exception as exc:  # noqa: BLE001 — recorded, then fallback
             self.failures += 1
             self.last_error = format_anthropic_error(exc)
             log.error("anthropic call failed model=%s %s", model, self.last_error)
+            self._record_call(
+                model=model,
+                ok=False,
+                system=system,
+                user=user,
+                output="",
+                error=self.last_error,
+                latency_ms=int((time.perf_counter() - started) * 1000),
+            )
             return None
 
         usage = getattr(msg, "usage", None)
+        in_tok = getattr(usage, "input_tokens", 0) or 0 if usage else 0
+        out_tok = getattr(usage, "output_tokens", 0) or 0 if usage else 0
         if usage:
-            self.budget.charge(
-                self.budget.estimate_tokens(
-                    getattr(usage, "input_tokens", 0) or 0,
-                    getattr(usage, "output_tokens", 0) or 0,
-                    judgment=judgment,
-                )
-            )
+            charged = self.budget.estimate_tokens(in_tok, out_tok, judgment=judgment)
+            self.budget.charge(charged)
         else:
+            charged = estimate
             self.budget.charge(estimate)
 
         data = parse_structured_payload(msg)
+        latency_ms = int((time.perf_counter() - started) * 1000)
         if data is None:
             self.failures += 1
             stop = getattr(msg, "stop_reason", None)
             self.last_error = f"no structured payload from {model} (stop_reason={stop})"
             log.error("%s", self.last_error)
+            self._record_call(
+                model=model,
+                ok=False,
+                system=system,
+                user=user,
+                output="",
+                error=self.last_error,
+                latency_ms=latency_ms,
+                input_tokens=in_tok,
+                output_tokens=out_tok,
+                cost_usd=charged,
+            )
             return None
         self.successes += 1
+        self._record_call(
+            model=model,
+            ok=True,
+            system=system,
+            user=user,
+            output=json.dumps(data)[:8000],
+            error="",
+            latency_ms=latency_ms,
+            input_tokens=in_tok,
+            output_tokens=out_tok,
+            cost_usd=charged,
+        )
         return data
+
+    def _record_call(
+        self,
+        *,
+        model: str,
+        ok: bool,
+        system: str,
+        user: str,
+        output: str,
+        error: str,
+        latency_ms: int,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
+        cost_usd: float = 0.0,
+    ) -> None:
+        if not self.run_id:
+            return
+        try:
+            from swarm.db import session_scope
+            from swarm.orm import AgentCallRow
+
+            blob = f"{system}\n\n{user}"
+            with session_scope() as session:
+                session.add(
+                    AgentCallRow(
+                        run_id=self.run_id,
+                        agent=self.agent,
+                        model=model,
+                        ok=ok,
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                        cost_usd=cost_usd,
+                        latency_ms=latency_ms,
+                        error=error,
+                        input_text=blob[:8000],
+                        output_text=output[:8000],
+                    )
+                )
+        except Exception as exc:  # noqa: BLE001
+            log.warning("agent_calls write failed: %s", exc)
 
     def _create(self, kwargs: dict[str, Any]) -> Any:
         try:

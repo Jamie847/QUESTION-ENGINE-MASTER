@@ -54,7 +54,7 @@
         <td>{{ r.started_at }}</td>
         <td>
           {% for h in (r.source_health or []) %}
-          <span class="pill {% if h.ok %}ok{% else %}bad{% endif %}">{{ h.source }} {{ h.count }}</span>
+          <span class="pill {% if h.dead %}dead{% elif h.ok %}ok{% else %}bad{% endif %}">{{ h.source }} {{ h.count }}{% if h.dead %} dead{% if h.last_ok %} · {{ h.last_ok }}{% endif %}{% endif %}</span>
           {% endfor %}
           {% if r.error %}<div class="muted">{{ r.error }}</div>{% endif %}
         </td>

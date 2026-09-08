@@ -77,6 +77,8 @@ class SourceHealth(BaseModel):
     count: int = 0
     error: str | None = None
     elapsed_ms: int = 0
+    dead: bool = False
+    last_ok: str | None = None
 
 
 class Brief(BaseModel):

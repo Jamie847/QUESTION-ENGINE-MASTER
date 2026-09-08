@@ -25,6 +25,10 @@ envVarGroups:
         sync: false
       - key: PERPLEXITY_API_KEY
         sync: false
+      - key: REDDIT_CLIENT_ID
+        sync: false
+      - key: REDDIT_CLIENT_SECRET
+        sync: false
       # Kept for DASHBOARD_AUTH=on. No generateValue — the Blueprint
       # must not mint a string nobody uses. Do not set value: "".
       - key: DASHBOARD_TOKEN
@@ -46,6 +50,8 @@ envVarGroups:
       - key: SOURCE_TIMEOUT_SECONDS
         value: "45"
       - key: STALE_AFTER_DAYS
+        value: "3"
+      - key: SOURCE_DEAD_AFTER_RUNS
         value: "3"
       - key: PYTHON_VERSION
         value: "3.12.3"

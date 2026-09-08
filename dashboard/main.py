@@ -133,7 +133,9 @@ def health() -> dict:
 
 def _latest_digest() -> DigestRow | None:
     with session_scope() as session:
-        row = session.scalar(select(DigestRow).order_by(DigestRow.date.desc()))
+        row = session.scalar(
+            select(DigestRow).order_by(DigestRow.created_at.desc(), DigestRow.id.desc())
+        )
         if row:
             session.expunge(row)
         return row
@@ -176,7 +178,7 @@ def _prior_day_curated(current_date: str | None) -> list[Question]:
         prior = session.scalar(
             select(DigestRow)
             .where(DigestRow.date < current_date)
-            .order_by(DigestRow.date.desc())
+            .order_by(DigestRow.date.desc(), DigestRow.created_at.desc())
         )
         if not prior:
             return []
@@ -306,7 +308,11 @@ def archive(
             want = int(rating)
             rows = [r for r in rows if rating_map.get(r.id) == want]
         digests = list(
-            session.scalars(select(DigestRow).order_by(DigestRow.date.desc())).all()
+            session.scalars(
+                select(DigestRow).order_by(
+                    DigestRow.date.desc(), DigestRow.created_at.desc()
+                )
+            ).all()
         )
         for r in rows:
             session.expunge(r)
@@ -450,10 +456,54 @@ def controls(request: Request):
     )
 
 
+def _digest_page(request: Request, row: DigestRow) -> HTMLResponse:
+    row.markdown = public_page_text(row.markdown)
+    if row.warnings:
+        row.warnings = [public_warning(str(w)) for w in row.warnings]
+    return templates.TemplateResponse(
+        request,
+        "digest.html",
+        {**_nav_ctx(request, "archive"), "digest": row},
+    )
+
+
+def _digest_markdown(row: DigestRow, filename: str) -> PlainTextResponse:
+    return PlainTextResponse(
+        public_page_text(row.markdown),
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.get("/digest/run/{run_id}.md")
+def download_digest_run(run_id: int):
+    """One digest per run — a same-day second click must stay downloadable."""
+    with session_scope() as session:
+        row = session.scalar(select(DigestRow).where(DigestRow.run_id == run_id))
+        if not row:
+            raise HTTPException(404, "No digest for that run")
+        session.expunge(row)
+    return _digest_markdown(row, f"question-engine-run-{run_id}.md")
+
+
+@app.get("/digest/run/{run_id}", response_class=HTMLResponse)
+def digest_run(request: Request, run_id: int):
+    with session_scope() as session:
+        row = session.scalar(select(DigestRow).where(DigestRow.run_id == run_id))
+        if not row:
+            raise HTTPException(404, "No digest for that run")
+        session.expunge(row)
+    return _digest_page(request, row)
+
+
 @app.get("/digest/{day}.md")
 def download_digest(day: str):
     with session_scope() as session:
-        row = session.scalar(select(DigestRow).where(DigestRow.date == day))
+        row = session.scalar(
+            select(DigestRow)
+            .where(DigestRow.date == day)
+            .order_by(DigestRow.created_at.desc(), DigestRow.id.desc())
+        )
         if not row:
             raise HTTPException(404, "No digest for that date")
         body = public_page_text(row.markdown)
@@ -468,18 +518,15 @@ def download_digest(day: str):
 @app.get("/digest/{day}", response_class=HTMLResponse)
 def digest_day(request: Request, day: str):
     with session_scope() as session:
-        row = session.scalar(select(DigestRow).where(DigestRow.date == day))
+        row = session.scalar(
+            select(DigestRow)
+            .where(DigestRow.date == day)
+            .order_by(DigestRow.created_at.desc(), DigestRow.id.desc())
+        )
         if not row:
             raise HTTPException(404, "No digest for that date")
         session.expunge(row)
-    row.markdown = public_page_text(row.markdown)
-    if row.warnings:
-        row.warnings = [public_warning(str(w)) for w in row.warnings]
-    return templates.TemplateResponse(
-        request,
-        "digest.html",
-        {**_nav_ctx(request, "archive"), "digest": row},
-    )
+    return _digest_page(request, row)
 
 
 class RatingIn(BaseModel):

@@ -51,9 +51,9 @@
   <ul>
     {% for d in digests %}
     <li>
-      <a href="/digest/{{ d.date }}">{{ d.date }}</a>
+      <a href="/digest/run/{{ d.run_id }}">{{ d.date }} · run {{ d.run_id }}</a>
       — {{ d.curated_count }} questions
-      <a class="dl" href="/digest/{{ d.date }}.md">.md</a>
+      <a class="dl" href="/digest/run/{{ d.run_id }}.md">.md</a>
     </li>
     {% endfor %}
   </ul>

@@ -28,10 +28,12 @@ from swarm.models import (
     SourceHealth,
     StageName,
 )
+from swarm.kills import labelled_kills
 from swarm.orm import (
     BriefRow,
     DigestRow,
     IntersectionRow,
+    KillReasonRow,
     QuestionRow,
     RunRow,
     SignalRow,
@@ -39,11 +41,13 @@ from swarm.orm import (
 from swarm.settings import get_settings
 from swarm.sources import (
     BraveSource,
+    FederalRegisterSource,
     HackerNewsSource,
     RedditSource,
     WikipediaSource,
     collect_signals,
 )
+from swarm.sources.health import annotate_dead_sources
 from swarm.taste import load_seed_profile
 
 logging.basicConfig(
@@ -142,6 +146,7 @@ def _execute(run_id: int) -> None:
     settings = get_settings()
     budget = RunBudget(settings.budget_usd)
     llm = LLM(budget)
+    llm.run_id = run_id
     taste = load_seed_profile()
     warnings: list[str] = []
     health: list[SourceHealth] = []
@@ -154,8 +159,15 @@ def _execute(run_id: int) -> None:
 
     if StageName.fetch.value not in done:
         _set_stage(run_id, StageName.fetch)
-        sources = [HackerNewsSource(), RedditSource(), WikipediaSource(), BraveSource()]
+        sources = [
+            HackerNewsSource(),
+            RedditSource(),
+            WikipediaSource(),
+            BraveSource(),
+            FederalRegisterSource(),
+        ]
         signals, health = _run_async(collect_signals(sources))
+        health = annotate_dead_sources(health, _prior_source_health(run_id))
         _persist_signals(run_id, signals)
         if not any(h.ok and h.count for h in health):
             warnings.append("all live sources returned nothing; using seeded demo signals")
@@ -163,6 +175,10 @@ def _execute(run_id: int) -> None:
             _persist_signals(run_id, signals)
         if any(not h.ok for h in health):
             warnings.append("one or more sources failed; run is degraded")
+        for h in health:
+            if h.dead:
+                last = f"; last ok {h.last_ok}" if h.last_ok else ""
+                warnings.append(f"{h.source} is dead (consecutive zeros){last}")
         _checkpoint(run_id, StageName.fetch, health=health, warnings=warnings)
     else:
         signals, health = _load_signals(run_id)
@@ -170,6 +186,7 @@ def _execute(run_id: int) -> None:
 
     if StageName.scout.value not in done:
         _set_stage(run_id, StageName.scout)
+        llm.agent = "scout"
         briefs = run_scouts(signals, llm, run_id=run_id)
         if not briefs:
             raise RuntimeError("scout produced no briefs")
@@ -180,6 +197,7 @@ def _execute(run_id: int) -> None:
 
     if StageName.cross_pollinate.value not in done:
         _set_stage(run_id, StageName.cross_pollinate)
+        llm.agent = "cross_pollinator"
         intersections = run_cross_pollinator(briefs, llm, run_id=run_id)
         _persist_intersections(run_id, intersections)
         _checkpoint(run_id, StageName.cross_pollinate, warnings=warnings)
@@ -188,6 +206,7 @@ def _execute(run_id: int) -> None:
 
     if StageName.smith.value not in done:
         _set_stage(run_id, StageName.smith)
+        llm.agent = "smiths"
         questions = run_smiths(briefs, intersections, taste, llm, run_id=run_id)
         if not questions:
             raise RuntimeError("smiths produced no questions")
@@ -207,8 +226,10 @@ def _execute(run_id: int) -> None:
 
     if StageName.curate.value not in done:
         _set_stage(run_id, StageName.curate)
+        llm.agent = "curator"
         questions = run_curator(questions, taste, llm)
         _persist_questions(run_id, questions, replace=True)
+        _persist_kill_reasons(run_id, questions)
         _checkpoint(run_id, StageName.curate, warnings=warnings)
     else:
         questions = _load_questions(run_id)
@@ -221,7 +242,11 @@ def _execute(run_id: int) -> None:
                 f"{llm.last_error}"
             )
         _set_stage(run_id, StageName.archive)
-        degraded = any(not h.ok for h in health) or any("degraded" in w for w in warnings)
+        degraded = (
+            any(not h.ok for h in health)
+            or any(h.dead for h in health)
+            or any("degraded" in w for w in warnings)
+        )
         warnings.append(f"writer_ok_calls={llm.successes}")
         if not llm.available:
             warnings.append("ANTHROPIC_API_KEY unset — heuristic writer used")
@@ -386,6 +411,33 @@ def _persist_intersections(run_id: int, items: list[Intersection]) -> None:
             )
 
 
+def _persist_kill_reasons(run_id: int, questions: list[Question]) -> None:
+    with session_scope() as session:
+        session.query(KillReasonRow).filter(KillReasonRow.run_id == run_id).delete()
+        for question_id, label, reason in labelled_kills(questions):
+            session.add(
+                KillReasonRow(
+                    question_id=question_id,
+                    run_id=run_id,
+                    label=label,
+                    reason=reason,
+                )
+            )
+
+
+def _prior_source_health(run_id: int) -> list[tuple[int, list[dict]]]:
+    with session_scope() as session:
+        rows = list(
+            session.scalars(
+                select(RunRow)
+                .where(RunRow.id != run_id)
+                .order_by(RunRow.id.desc())
+                .limit(12)
+            )
+        )
+        return [(r.id, list(r.source_health or [])) for r in rows]
+
+
 def _persist_questions(run_id: int, questions: list[Question], *, replace: bool) -> None:
     with session_scope() as session:
         if replace:
@@ -412,33 +464,24 @@ def _persist_questions(run_id: int, questions: list[Question], *, replace: bool)
 
 
 def _persist_digest(run_id: int, doc) -> None:  # noqa: ANN001
+    payload = dict(
+        title=doc.title,
+        markdown=doc.markdown,
+        top_ids=doc.top_ids,
+        curated_count=doc.curated_count,
+        killed_count=doc.killed_count,
+        rejected_intersection_count=doc.rejected_intersection_count,
+        degraded=doc.degraded,
+        warnings=doc.warnings,
+    )
     with session_scope() as session:
-        existing = session.scalar(select(DigestRow).where(DigestRow.date == doc.date))
+        existing = session.scalar(select(DigestRow).where(DigestRow.run_id == run_id))
         if existing:
-            existing.run_id = run_id
-            existing.title = doc.title
-            existing.markdown = doc.markdown
-            existing.top_ids = doc.top_ids
-            existing.curated_count = doc.curated_count
-            existing.killed_count = doc.killed_count
-            existing.rejected_intersection_count = doc.rejected_intersection_count
-            existing.degraded = doc.degraded
-            existing.warnings = doc.warnings
-        else:
-            session.add(
-                DigestRow(
-                    run_id=run_id,
-                    date=doc.date,
-                    title=doc.title,
-                    markdown=doc.markdown,
-                    top_ids=doc.top_ids,
-                    curated_count=doc.curated_count,
-                    killed_count=doc.killed_count,
-                    rejected_intersection_count=doc.rejected_intersection_count,
-                    degraded=doc.degraded,
-                    warnings=doc.warnings,
-                )
-            )
+            for key, value in payload.items():
+                setattr(existing, key, value)
+            existing.date = doc.date
+            return
+        session.add(DigestRow(run_id=run_id, date=doc.date, **payload))
 
 
 def _load_signals(run_id: int) -> tuple[list[Signal], list[SourceHealth]]:
@@ -562,7 +605,7 @@ def _prior_curated_questions(run_id: int, *, as_of: date | None = None) -> list[
         prior = session.scalar(
             select(DigestRow)
             .where(DigestRow.date < as_of.isoformat())
-            .order_by(DigestRow.date.desc())
+            .order_by(DigestRow.date.desc(), DigestRow.created_at.desc())
         )
         if not prior or prior.run_id == run_id:
             return []
@@ -578,9 +621,17 @@ def _rerender_digest(day: str | None) -> int:
     """Rewrite stored markdown so a download matches the current archivist."""
     with session_scope() as session:
         if day:
-            row = session.scalar(select(DigestRow).where(DigestRow.date == day))
+            row = session.scalar(
+                select(DigestRow)
+                .where(DigestRow.date == day)
+                .order_by(DigestRow.created_at.desc(), DigestRow.id.desc())
+            )
         else:
-            row = session.scalar(select(DigestRow).order_by(DigestRow.date.desc()))
+            row = session.scalar(
+                select(DigestRow).order_by(
+                    DigestRow.created_at.desc(), DigestRow.id.desc()
+                )
+            )
         if not row:
             print("no digest to rerender", file=sys.stderr)
             return 1
