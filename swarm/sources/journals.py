@@ -56,22 +56,33 @@ def parse_feed_items(xml_text: str) -> list[dict]:
 class JournalRssSource(SourceAdapter):
     name = "journals"
     timeout_s = 90
+    feed_errors: list[str]
 
     async def fetch(self) -> list[Signal]:
         settings = get_settings()
-        headers = {"User-Agent": settings.user_agent, "Accept": "application/rss+xml, application/xml"}
+        # JAMA answers 406 unless text/xml or */* is acceptable.
+        headers = {
+            "User-Agent": settings.user_agent,
+            "Accept": "application/rss+xml, application/xml, text/xml, */*",
+        }
         feeds: list[tuple[str, str]] = []
         for vertical in verticals():
             for url in vertical.get("journal_feeds") or []:
                 feeds.append((vertical["id"], str(url)))
         signals: list[Signal] = []
+        errors: list[str] = []
+        self.feed_errors = errors
         async with httpx.AsyncClient(
             timeout=settings.source_timeout_s, headers=headers, follow_redirects=True
         ) as client:
             for vertical_id, url in feeds:
-                resp = await client.get(url)
-                resp.raise_for_status()
-                rows = parse_feed_items(resp.text)[:PER_FEED]
+                try:
+                    resp = await client.get(url)
+                    resp.raise_for_status()
+                    rows = parse_feed_items(resp.text)[:PER_FEED]
+                except Exception as exc:  # noqa: BLE001 — one feed must not darken the rest
+                    errors.append(f"{url}: {type(exc).__name__}")
+                    continue
                 total = len(rows)
                 for index, row in enumerate(rows):
                     signals.append(
@@ -85,6 +96,8 @@ class JournalRssSource(SourceAdapter):
                             raw={"guid": row["guid"], "feed": url},
                         )
                     )
+        if errors and not signals:
+            raise RuntimeError("; ".join(errors))
         return _dedupe(signals)
 
 

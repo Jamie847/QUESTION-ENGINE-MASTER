@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from swarm.agents.scout import signals_for_vertical
+from swarm.agents.scout import format_signal_block, signals_for_vertical
 from swarm.config import verticals
 from swarm.freshness import freshness_window_days
 from swarm.models import Signal, SourceHealth
@@ -215,6 +215,57 @@ def test_s4_science_and_education_are_phase_one_with_draft_queries():
         assert row.get("sam_keywords"), row["id"]
     science = next(row for row in verticals() if row["id"] == "science")
     assert "quant-ph" in science["arxiv_categories"]
+
+
+def test_s3_one_journal_feed_failure_keeps_the_others(monkeypatch):
+    """Red against raise_for_status on JAMA aborting Nature and the rest of the source."""
+    good = (FIXTURES / "journal_rss10.xml").read_text(encoding="utf-8")
+    monkeypatch.setattr(
+        "swarm.sources.journals.verticals",
+        lambda: [
+            {
+                "id": "science",
+                "journal_feeds": [
+                    "https://nature.example/nature.rss",
+                    "https://jamanetwork.com/rss/site_3/67.xml",
+                ],
+            }
+        ],
+    )
+
+    class FakeResp:
+        def __init__(self, status: int, text: str = ""):
+            self.status_code = status
+            self.text = text
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                raise RuntimeError(f"HTTP {self.status_code}")
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def get(self, url):
+            if "jama" in url:
+                return FakeResp(406)
+            return FakeResp(200, good)
+
+    monkeypatch.setattr("swarm.sources.journals.httpx.AsyncClient", FakeClient)
+    from swarm.sources.journals import JournalRssSource
+
+    src = JournalRssSource()
+    items, health = asyncio.run(collect_signals([src]))
+    assert items and items[0].snippet
+    assert items[0].raw.get("guid") == "doi:10.1000/example.1"
+    assert health[0].ok is True
+    assert health[0].error and "jamanetwork.com" in health[0].error
 
 
 def test_s1_scout_block_includes_a_trimmed_snippet():

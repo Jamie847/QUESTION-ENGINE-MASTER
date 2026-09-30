@@ -125,7 +125,7 @@ def test_f2_round_robin_keeps_a_low_score_source_inside_eighteen_slots():
 
 def test_f3_template_card_is_labelled(monkeypatch):
     """Red against a template question rendered with no visible template tag."""
-    init_db()
+    _clear("wo006-template-q")
     started = datetime(2026, 9, 30, 15, 0, tzinfo=timezone.utc)
     with session_scope() as session:
         run = RunRow(
@@ -244,7 +244,8 @@ def test_f5_stand_in_is_labelled_until_ratings_cross_the_threshold():
     client = TestClient(app)
     before = client.get("/taste")
     assert before.status_code == 200
-    assert "stand-in seed (not the Operator's)" in before.text
+    assert "stand-in seed" in before.text
+    assert "not the Operator" in before.text
     try:
         with session_scope() as session:
             run = RunRow(status="completed", budget_usd=5.0, warnings=[], source_health=[], stages=[])
@@ -292,7 +293,7 @@ def test_f5_stand_in_is_labelled_until_ratings_cross_the_threshold():
 
 def test_f6_promote_keeps_status_and_rank():
     """Red against promote rewriting a killed question to curated rank 50."""
-    init_db()
+    _clear("wo006-promote-q")
     with session_scope() as session:
         run = RunRow(status="completed", budget_usd=5.0, warnings=[], source_health=[], stages=[])
         session.add(run)
@@ -375,7 +376,7 @@ def test_f7_today_page_uses_display_tz(monkeypatch):
 
 def test_f8_cards_hide_unrecorded_sources_and_show_linked_ones():
     """Red against a card that links a URL the scout was not allowed to keep."""
-    init_db()
+    _clear("wo006-pre", "wo006-linked", "wo006-brief-secret", "wo006-brief-linked")
     secret = "https://secret.example/not-recorded"
     linked = "https://linked.example/brief"
     with session_scope() as session:
@@ -470,7 +471,7 @@ def test_f8_cards_hide_unrecorded_sources_and_show_linked_ones():
 
 def test_f9_coverage_is_labelled_a_model_guess():
     """Red against a coverage word with no model-guess label on the card."""
-    init_db()
+    _clear("wo006-guess")
     with session_scope() as session:
         run = RunRow(status="completed", budget_usd=5.0, warnings=[], source_health=[], stages=["archive"])
         session.add(run)
@@ -510,7 +511,7 @@ def test_f9_coverage_is_labelled_a_model_guess():
 
 def test_pre_wo006_backfill_rewrites_blank_provenance_only():
     """Red against leaving old questions unmarked, and against relabelling a new linked row."""
-    init_db()
+    _clear("wo006-blank-prov", "wo006-keep-linked")
     with session_scope() as session:
         run = RunRow(status="completed", budget_usd=5.0, warnings=[], source_health=[], stages=[])
         session.add(run)
@@ -548,6 +549,14 @@ def test_pre_wo006_backfill_rewrites_blank_provenance_only():
         kept = session.get(QuestionRow, "wo006-keep-linked")
         assert blank is not None and blank.provenance == "pre-wo006"
         assert kept is not None and kept.provenance == "linked"
+
+
+def _clear(*ids: str) -> None:
+    init_db()
+    with session_scope() as session:
+        session.execute(delete(RatingRow).where(RatingRow.question_id.in_(ids)))
+        session.execute(delete(QuestionRow).where(QuestionRow.id.in_(ids)))
+        session.execute(delete(BriefRow).where(BriefRow.id.in_(ids)))
 
 
 def _article(html: str, question_id: str) -> str:

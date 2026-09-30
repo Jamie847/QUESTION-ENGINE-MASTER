@@ -48,6 +48,7 @@ async def collect_signals(sources: list[SourceAdapter]) -> tuple[list[Signal], l
             items = await asyncio.wait_for(src.fetch(), timeout=timeout)
             elapsed = int((time.perf_counter() - started) * 1000)
             limited = list(getattr(src, "rate_limited_queries", []) or [])
+            feed_errors = list(getattr(src, "feed_errors", []) or [])
             error = None
             ok = True
             if limited:
@@ -55,6 +56,8 @@ async def collect_signals(sources: list[SourceAdapter]) -> tuple[list[Signal], l
                 error = f"429 on query: {named}"
                 if not items:
                     ok = False
+            elif feed_errors:
+                error = "feed failed: " + "; ".join(feed_errors)
             return items, SourceHealth(
                 source=src.name,
                 ok=ok,

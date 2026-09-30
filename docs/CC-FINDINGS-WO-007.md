@@ -53,6 +53,25 @@ Brave and Federal Register still use each vertical's `search_queries`. New verti
 
 Five scouts run. Smith and curator call counts do not change with the vertical count beyond the briefs those scouts produce. The curator is still one call.
 
+## Local unkeyed run during the suite
+
+The existing swarm test, with no API keys in the environment, archived a degraded digest. Source health from that run:
+
+| Source | Result |
+|---|---|
+| hacker_news | 33 |
+| wikipedia | 10 |
+| federal_register | 14 |
+| huggingface | 15 |
+| reddit | off, not fetched |
+| brave, openalex, regulations_gov, sam_gov | needs key |
+| arxiv | `TimeoutError` at the 90s adapter cap (five category queries, 3s apart) |
+| journals | one feed, JAMA, returned HTTP 406 because `Accept` did not include `text/xml` |
+
+The journal adapter now sends `text/xml` and keeps the feeds that succeed when one fails. `test_s3_one_journal_feed_failure_keeps_the_others` is red against the old `raise_for_status` that dropped every journal.
+
+A second unkeyed run after that change fetched arXiv **50** and journals **90**, with Reddit still off and the four keyed sources still `needs key`. The run was degraded only because `ANTHROPIC_API_KEY` was unset, which is the existing heuristic-writer path.
+
 ## Findings, not workarounds
 
 1. SAM's 10 requests / 24 hours covers one five-vertical run and not a second run the same day. SAM was implemented. USAspending was not.
