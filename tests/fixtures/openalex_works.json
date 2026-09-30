@@ -1,0 +1,19 @@
+{
+  "results": [
+    {
+      "id": "https://openalex.org/W4386114105",
+      "doi": "https://doi.org/10.1016/j.cosrev.2026.101072",
+      "display_name": "Quantum-inspired machine learning: a survey",
+      "abstract_inverted_index": {
+        "Quantum-inspired": [0],
+        "Machine": [1],
+        "Learning": [2],
+        "(QiML)": [3],
+        "is": [4],
+        "a": [5],
+        "burgeoning": [6],
+        "field": [7]
+      }
+    }
+  ]
+}

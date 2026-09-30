@@ -7,6 +7,7 @@ from swarm.models import Signal
 from swarm.settings import get_settings
 from swarm.sources.base import SourceAdapter
 from swarm.sources.routing import contains_keyword, hint_verticals
+from swarm.sources.snippets import clip_snippet
 
 
 class HackerNewsSource(SourceAdapter):
@@ -45,7 +46,7 @@ class HackerNewsSource(SourceAdapter):
                             source=self.name,
                             title=title,
                             url=story_url,
-                            snippet=(hit.get("story_text") or "")[:400],
+                            snippet=clip_snippet(hit.get("story_text") or ""),
                             score=(points + comments * 0.4) * extra_score,
                             vertical_hints=hints,
                             raw={"points": points, "comments": comments, "objectID": object_id},

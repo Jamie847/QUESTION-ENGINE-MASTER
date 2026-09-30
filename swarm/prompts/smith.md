@@ -16,4 +16,6 @@ A bad question: "What are the implications of X?", "How will Y affect Z?", "oppo
 Taste file (the user's curiosity):
 {taste}
 
+Cite intersection_ref as one of the day's I labels, or none. Cite brief_refs as B labels from the briefs you actually used. A missing label is an unlinked question; do not guess a neighbour.
+
 Return questions only. No preamble.

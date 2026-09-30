@@ -102,6 +102,11 @@ CP confirms the Operator wrote `taste/seed.md` before the first keyed run, and t
 show the curator applying it. **The earlier CW finding that the seed was empty is superseded**
 and should not be repeated by a later session.
 
+**Superseded 2026-09-30 (WO-006).** The Operator stated he did not write the example questions
+in `data/taste_seed.yaml`. The sentence quoted as proof — "specific populations, named
+mechanisms…" — was a hardcoded string in `swarm/taste.py`, now the `notes` field of the
+stand-in file. That file is a stand-in. It is not his seed. Do not repeat the claim above.
+
 ## 7. What is and is not blocked on ratings — CW note
 
 CP wrote that *"every gate on the board is waiting on you rating five digests."* That is true of

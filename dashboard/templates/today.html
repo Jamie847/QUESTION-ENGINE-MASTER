@@ -6,12 +6,22 @@
 <section class="empty">
   <p class="kicker">No digest yet</p>
   <h1>The swarm has not written today.</h1>
-  <p>Trigger a run from <a href="/controls">Controls</a>. Without an Anthropic key it still produces a grounded digest from live sources (or a seeded fallback if they are dark).</p>
+  <p>Trigger a run from <a href="/controls">Controls</a>. If every source is dark, the run fails instead of inventing headlines.</p>
 </section>
 {% else %}
 
 <section class="lede">
   <p class="kicker">{{ digest.date }}{% if digest.degraded %} · degraded{% endif %}</p>
+  {% if run %}
+  <p class="run-line">Run #{{ run.id }} · {{ fmt_stamp(run.started_at) }} · {{ fmt_duration(run.started_at, run.finished_at) }} · ${{ "%.2f"|format(run.cost_usd or 0) }} · {{ run.status }}</p>
+  {% endif %}
+  <p class="hint">{{ steering }}</p>
+  {% if read_line %}
+  <p class="meta-row">Read this run: {{ read_line }}</p>
+  {% endif %}
+  {% if ran_verticals or ran_lenses %}
+  <p class="meta-row">Verticals: {{ ran_verticals | join(", ") or "—" }} · Lenses: {{ ran_lenses | join(", ") or "—" }}</p>
+  {% endif %}
   <p class="last-run {% if digest_stale %}stale{% endif %}">
     {{ last_run_label }}
     {% if digest_stale %}
@@ -54,7 +64,7 @@
     {% for i in accepted %}
     <li>
       <span class="verts">{{ i.verticals | join(" × ") }}</span>
-      <span class="cov cov-{{ i.coverage }}">coverage {{ i.coverage }}</span>
+      <span class="cov cov-{{ i.coverage }}">coverage (model guess) {{ i.coverage }}</span>
       <span class="surprise">surprise {{ "%.2f"|format(i.surprise) }}</span>
       <p>{{ i.thesis }}</p>
     </li>
@@ -64,12 +74,43 @@
 
 <section>
   <h2>Question bank</h2>
+  <div class="chips" data-chip-scope="bank">
+    <button type="button" class="chip on" data-vert="">All</button>
+    {% for v in verticals %}
+    <button type="button" class="chip" data-vert="{{ v.id }}">{{ v.name }}</button>
+    {% endfor %}
+  </div>
   {% if not bank %}
   <p class="muted">The top five is the whole bank today.</p>
   {% endif %}
-  {% for q in bank %}
-    {% include "partials/question.html" %}
+  {% for group in bank_groups %}
+  <div class="bank-group" data-vert="{{ group.id }}">
+    <h3>{{ group.name }}</h3>
+    {% for q in group.questions %}
+      {% include "partials/question.html" %}
+    {% endfor %}
+  </div>
   {% endfor %}
+</section>
+
+<section>
+  <details>
+    <summary>What we read</summary>
+    {% for vertical, items in briefs_by_vertical.items() %}
+    <h3>{{ vertical }}</h3>
+    {% for b in items %}
+    <p>
+      <strong>{{ b.headline }}</strong>
+      {% if b.why_now %} — {{ b.why_now }}{% endif %}
+      {% for u in (b.sources or []) %}
+        {% if u %}<a href="{{ u }}">link</a>{% endif %}
+      {% endfor %}
+    </p>
+    {% endfor %}
+    {% else %}
+    <p class="muted">No briefs stored for this run.</p>
+    {% endfor %}
+  </details>
 </section>
 
 <section>

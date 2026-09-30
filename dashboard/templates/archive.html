@@ -3,7 +3,15 @@
 {% block body %}
 <section class="lede">
   <p class="kicker">Archive</p>
-  <h1>Every question the curator let live.</h1>
+  <h1>{% if saved == '1' %}Saved for ideation{% else %}Every question the curator let live.{% endif %}</h1>
+  <p class="meta-row">
+    {% if saved == '1' %}
+    <a href="/archive">Back to curated</a>
+    {% else %}
+    <a href="/archive?saved=1">Saved for ideation</a>
+    {% endif %}
+    · Ideation is not built yet.
+  </p>
 </section>
 
 <form class="filters" method="get" action="/archive">
@@ -23,7 +31,7 @@
   <select name="coverage">
     <option value="">Any coverage</option>
     {% for c in ["none", "thin", "crowded", "unknown"] %}
-    <option value="{{ c }}" {% if coverage == c %}selected{% endif %}>{{ c }}</option>
+    <option value="{{ c }}" {% if coverage == c %}selected{% endif %}>{{ c }} (model guess)</option>
     {% endfor %}
   </select>
   <select name="rating">

@@ -14,7 +14,7 @@ def annotate_dead_sources(
     n = max(1, get_settings().source_dead_after_runs)
     out: list[SourceHealth] = []
     for item in current:
-        if item.error == "skipped":
+        if item.error in {"skipped", "off", "needs key"}:
             out.append(item)
             continue
         if item.count > 0:
@@ -28,7 +28,7 @@ def annotate_dead_sources(
             past = _find(blob, item.source)
             if past is None:
                 continue
-            if past.get("error") == "skipped":
+            if past.get("error") in {"skipped", "off", "needs key"}:
                 continue
             if int(past.get("count") or 0) > 0:
                 last_ok = f"run {run_id}"

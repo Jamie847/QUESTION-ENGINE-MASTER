@@ -1,0 +1,14 @@
+{
+  "data": [
+    {
+      "id": "FDA-2026-0001",
+      "attributes": {
+        "title": "Comment period on device X",
+        "summary": "The FDA counted 40 comments.",
+        "docketId": "FDA-2026-N-1",
+        "documentId": "FDA-2026-0001"
+      },
+      "links": {"html": "https://www.regulations.gov/document/FDA-2026-0001"}
+    }
+  ]
+}

@@ -79,6 +79,7 @@ class SourceHealth(BaseModel):
     elapsed_ms: int = 0
     dead: bool = False
     last_ok: str | None = None
+    rate_limited: list[str] = Field(default_factory=list)
 
 
 class Brief(BaseModel):
@@ -92,6 +93,7 @@ class Brief(BaseModel):
     sources: list[str] = Field(default_factory=list)
     raw_signals: list[str] = Field(default_factory=list)
     score: float = 0.0
+    written_by: str = ""
 
 
 class Intersection(BaseModel):
@@ -105,6 +107,7 @@ class Intersection(BaseModel):
     accepted: bool = True
     reject_reason: str = ""
     brief_ids: list[str] = Field(default_factory=list)
+    written_by: str = ""
 
 
 class Question(BaseModel):
@@ -121,6 +124,9 @@ class Question(BaseModel):
     brief_ids: list[str] = Field(default_factory=list)
     intersection_id: str | None = None
     context: str = ""
+    provenance: str = "linked"
+    written_by: str = ""
+    promoted_at: datetime | None = None
 
     @field_validator("text")
     @classmethod

@@ -161,6 +161,10 @@ class LLM:
     def available(self) -> bool:
         return self._client is not None
 
+    def writer_name(self, *, judgment: bool = False) -> str:
+        model = self.settings.judgment_model if judgment else self.settings.anthropic_model
+        return f"model:{model}"
+
     def writer_failed(self) -> bool:
         """Key is set, every attempted call failed. Do not publish templates."""
         return self.available and self.attempts > 0 and self.successes == 0

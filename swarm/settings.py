@@ -52,6 +52,14 @@ class Settings(BaseSettings):
     reddit_client_id: str = ""
     reddit_client_secret: str = ""
     source_dead_after_runs: int = 3
+    display_tz: str = "UTC"
+    allow_demo_signals: bool = False
+    snippet_chars: int = 800
+    scout_signals_per_vertical: int = 30
+    brave_min_interval_s: float = 1.1
+    openalex_api_key: str = ""
+    regulations_gov_api_key: str = ""
+    sam_gov_api_key: str = ""
 
     @computed_field  # type: ignore[prop-decorator]
     @property

@@ -1,5 +1,6 @@
-# Phase 1 thinner swarm: three verticals. Add rows here later; scouts
-# are config-driven and do not need new Python for a new vertical.
+# Phase 1 thinner swarm. Science and education were added by the Operator
+# on 2026-09-30 and are phase 1 so the loader keeps them.
+# Query strings below are drafts — tune after the first run.
 verticals:
   - id: ai
     name: AI
@@ -47,6 +48,19 @@ verticals:
       - chatbot
       - "computer vision"
       - "reinforcement learning"
+    # draft — tune after first run
+    arxiv_categories:
+      - cs.AI
+      - cs.LG
+      - cs.CL
+    openalex_terms:
+      - "foundation model"
+      - "machine learning"
+    journal_feeds: []
+    sam_keywords:
+      - "artificial intelligence"
+    sam_naics:
+      - "541512"
 
   - id: health
     name: Health
@@ -99,6 +113,21 @@ verticals:
       - nursing
       - pandemic
       - longevity
+    # draft — tune after first run
+    arxiv_categories:
+      - q-bio.QM
+      - q-bio.BM
+    openalex_terms:
+      - "clinical trial"
+      - "drug approval"
+    journal_feeds:
+      - "https://www.nejm.org/action/showFeed?jc=nejm&type=etoc&feed=rss"
+      - "https://jamanetwork.com/rss/site_3/67.xml"
+      - "https://www.thelancet.com/rssfeed/lancet_current.xml"
+    sam_keywords:
+      - hospital
+    sam_naics:
+      - "622110"
 
   - id: business
     name: Business/Finance
@@ -147,3 +176,102 @@ verticals:
       - "supply chain"
       - antitrust
       - "stock buyback"
+    # draft — tune after first run
+    arxiv_categories:
+      - econ.GN
+      - q-fin.GN
+      - q-fin.EC
+    openalex_terms:
+      - "monetary policy"
+      - "labor market"
+    journal_feeds: []
+    sam_keywords:
+      - "financial services"
+    sam_naics:
+      - "522110"
+
+  - id: science
+    name: Science
+    enabled: true
+    phase: 1  # Operator added 2026-09-30
+    search_queries:  # draft — tune after first run
+      - "quantum computing experiment"
+      - "materials science breakthrough"
+      - "climate observation satellite"
+      - "fusion energy experiment"
+    hn_keywords:
+      - quantum
+      - physics
+      - fusion
+      - climate
+      - NASA
+      - telescope
+      - materials
+    keywords:
+      - quantum
+      - physics
+      - fusion
+      - climate
+      - nasa
+      - telescope
+      - materials
+      - superconduct
+      - particle
+      - genome
+      - crispr
+      - battery
+    # draft — tune after first run
+    arxiv_categories:
+      - quant-ph
+      - astro-ph.CO
+      - cond-mat.mtrl-sci
+      - physics.gen-ph
+      - q-bio.NC
+    openalex_terms:
+      - quantum
+      - "materials science"
+    journal_feeds:
+      - "https://www.nature.com/nature.rss"
+      - "https://www.science.org/action/showFeed?type=etoc&feed=rss&jc=science"
+      - "https://www.cell.com/cell/current.rss"
+    sam_keywords:
+      - "research laboratory"
+    sam_naics:
+      - "541715"
+
+  - id: education
+    name: Education
+    enabled: true
+    phase: 1  # Operator added 2026-09-30
+    search_queries:  # draft — tune after first run
+      - "student loan regulation"
+      - "teacher shortage"
+      - "higher education enrollment"
+      - "education technology classroom"
+    hn_keywords:
+      - education
+      - university
+      - student
+      - teacher
+      - school
+    keywords:
+      - education
+      - university
+      - student
+      - teacher
+      - school
+      - classroom
+      - tuition
+      - enrollment
+      - curriculum
+    # draft — tune after first run
+    arxiv_categories:
+      - cs.CY
+    openalex_terms:
+      - "education research"
+      - "learning outcomes"
+    journal_feeds: []
+    sam_keywords:
+      - education
+    sam_naics:
+      - "611110"

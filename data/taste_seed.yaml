@@ -4,6 +4,13 @@
 # them as similarity anchors). Replace or rate against these once
 # the dashboard is live. A weekly taste-profile compressor will
 # rotate exemplars later; do not flatten this file into a slogan.
+#
+# The Operator did not write these examples (2026-09-30). The page
+# must say so until taste/seed.yaml or rated whys take over.
+
+notes: >
+  Seeded voice: specific populations, named mechanisms,
+  boring infrastructure, falsifiable bets. Kill seminar titles.
 
 keeps:
   - stars: 5

@@ -17,8 +17,10 @@ document.querySelectorAll(".stars").forEach((el) => {
     if (!btn) return;
     const stars = Number(btn.dataset.star);
     const qid = el.dataset.qid;
+    const whyInput = el.querySelector(".why");
+    const why = whyInput ? whyInput.value : "";
     try {
-      await postJSON(`/api/questions/${qid}/rating`, { stars });
+      await postJSON(`/api/questions/${qid}/rating`, { stars, why });
       el.dataset.stars = String(stars);
       el.querySelectorAll("[data-star]").forEach((b) => {
         b.classList.toggle("on", Number(b.dataset.star) <= stars);
@@ -29,11 +31,23 @@ document.querySelectorAll(".stars").forEach((el) => {
   });
 });
 
+document.querySelectorAll(".chips").forEach((bar) => {
+  bar.addEventListener("click", (ev) => {
+    const btn = ev.target.closest(".chip");
+    if (!btn) return;
+    bar.querySelectorAll(".chip").forEach((chip) => chip.classList.toggle("on", chip === btn));
+    const vert = btn.dataset.vert || "";
+    document.querySelectorAll(".bank-group").forEach((group) => {
+      group.hidden = Boolean(vert) && group.dataset.vert !== vert;
+    });
+  });
+});
+
 document.querySelectorAll(".promote").forEach((btn) => {
   btn.addEventListener("click", async () => {
     try {
       await postJSON(`/api/questions/${btn.dataset.qid}/promote`);
-      btn.textContent = "Promoted";
+      btn.textContent = "Saved — ideation not built yet.";
       btn.disabled = true;
     } catch (err) {
       alert("Could not promote: " + err.message);

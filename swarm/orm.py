@@ -43,6 +43,8 @@ class RunRow(Base):
     warnings: Mapped[list[Any]] = mapped_column(JSONType, default=list)
     source_health: Mapped[list[Any]] = mapped_column(JSONType, default=list)
     stages: Mapped[list[Any]] = mapped_column(JSONType, default=list)
+    curated_by: Mapped[str] = mapped_column(String(128), default="")
+    scout_seen: Mapped[dict[str, Any]] = mapped_column(JSONType, default=dict)
 
     briefs: Mapped[list[BriefRow]] = relationship(back_populates="run")
     intersections: Mapped[list[IntersectionRow]] = relationship(back_populates="run")
@@ -82,6 +84,7 @@ class BriefRow(Base):
     sources: Mapped[list[Any]] = mapped_column(JSONType, default=list)
     raw_signals: Mapped[list[Any]] = mapped_column(JSONType, default=list)
     score: Mapped[float] = mapped_column(Float, default=0.0)
+    written_by: Mapped[str] = mapped_column(String(128), default="")
 
     run: Mapped[RunRow] = relationship(back_populates="briefs")
 
@@ -100,6 +103,7 @@ class IntersectionRow(Base):
     accepted: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     reject_reason: Mapped[str] = mapped_column(Text, default="")
     brief_ids: Mapped[list[Any]] = mapped_column(JSONType, default=list)
+    written_by: Mapped[str] = mapped_column(String(128), default="")
 
     run: Mapped[RunRow] = relationship(back_populates="intersections")
 
@@ -122,6 +126,9 @@ class QuestionRow(Base):
     intersection_id: Mapped[str | None] = mapped_column(String(64))
     context: Mapped[str] = mapped_column(Text, default="")
     promoted: Mapped[bool] = mapped_column(Boolean, default=False)
+    promoted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    provenance: Mapped[str] = mapped_column(String(32), default="linked")
+    written_by: Mapped[str] = mapped_column(String(128), default="")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -137,6 +144,7 @@ class RatingRow(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     question_id: Mapped[str] = mapped_column(ForeignKey("questions.id"), index=True)
     stars: Mapped[int] = mapped_column(Integer)
+    why: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

@@ -40,6 +40,7 @@ def init_db() -> None:
     engine = get_engine()
     Base.metadata.create_all(engine)
     _migrate_digest_uniqueness(engine)
+    _migrate_wo006(engine)
 
 
 def _migrate_digest_uniqueness(engine: Engine) -> None:
@@ -120,6 +121,46 @@ def _migrate_digest_uniqueness(engine: Engine) -> None:
             )
             conn.execute(text("DROP TABLE digests_old_date_unique"))
         conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_digest_run ON digests (run_id)"))
+
+
+def _migrate_wo006(engine: Engine) -> None:
+    """Add honesty columns. Existing questions are marked pre-wo006; links are not repaired."""
+    specs: list[tuple[str, str, str]] = [
+        ("questions", "provenance", "VARCHAR(32)"),
+        ("questions", "written_by", "VARCHAR(128)"),
+        ("questions", "promoted_at", "TIMESTAMP"),
+        ("briefs", "written_by", "VARCHAR(128)"),
+        ("intersections", "written_by", "VARCHAR(128)"),
+        ("runs", "curated_by", "VARCHAR(128)"),
+        ("ratings", "why", "TEXT"),
+    ]
+    json_type = "JSON" if engine.dialect.name == "postgresql" else "TEXT"
+    specs.append(("runs", "scout_seen", json_type))
+    with engine.begin() as conn:
+        for table, column, ddl in specs:
+            if column in _column_names(conn, engine, table):
+                continue
+            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}"))
+        conn.execute(
+            text(
+                "UPDATE questions SET provenance = 'pre-wo006' "
+                "WHERE provenance IS NULL OR provenance = ''"
+            )
+        )
+
+
+def _column_names(conn, engine: Engine, table: str) -> set[str]:
+    if engine.dialect.name == "postgresql":
+        rows = conn.execute(
+            text(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name = :table"
+            ),
+            {"table": table},
+        ).all()
+        return {str(row[0]) for row in rows}
+    rows = conn.execute(text(f"PRAGMA table_info('{table}')")).all()
+    return {str(row[1]) for row in rows}
 
 
 @contextmanager

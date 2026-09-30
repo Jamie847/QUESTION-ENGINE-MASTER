@@ -1,0 +1,26 @@
+# One row per adapter. A disabled source is not fetched, shows as "off"
+# on Controls, and never counts toward dead.
+sources:
+  - id: hacker_news
+    enabled: true
+  - id: reddit
+    enabled: false
+    # Operator decision 2026-09-30: dropped. Not a defect; do not re-enable without asking him.
+  - id: wikipedia
+    enabled: true
+  - id: brave
+    enabled: true
+  - id: federal_register
+    enabled: true
+  - id: arxiv
+    enabled: true
+  - id: huggingface
+    enabled: true
+  - id: journals
+    enabled: true
+  - id: openalex
+    enabled: true
+  - id: regulations_gov
+    enabled: true
+  - id: sam_gov
+    enabled: true
