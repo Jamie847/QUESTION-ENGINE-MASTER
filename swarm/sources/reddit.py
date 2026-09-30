@@ -7,6 +7,7 @@ from swarm.models import Signal
 from swarm.settings import get_settings
 from swarm.sources.base import SourceAdapter
 from swarm.sources.routing import hint_verticals
+from swarm.sources.snippets import clip_snippet
 
 
 class RedditSource(SourceAdapter):
@@ -74,7 +75,7 @@ class RedditSource(SourceAdapter):
                             source=self.name,
                             title=title,
                             url=url_out,
-                            snippet=(data.get("selftext") or "")[:400],
+                            snippet=clip_snippet(data.get("selftext") or ""),
                             score=float(data.get("ups") or 0)
                             + float(data.get("num_comments") or 0) * 0.3,
                             vertical_hints=hint_verticals(title, verticals())

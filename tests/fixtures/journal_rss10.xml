@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns="http://purl.org/rss/1.0/">
+  <item rdf:about="https://nature.example/item-1">
+    <title>A cell mechanism named on 12 March</title>
+    <link>https://nature.example/item-1</link>
+    <description>The agency measured 12 samples.</description>
+    <dc:identifier>doi:10.1000/example.1</dc:identifier>
+  </item>
+</rdf:RDF>

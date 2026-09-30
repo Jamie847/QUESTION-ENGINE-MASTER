@@ -249,6 +249,36 @@ h2 {
 }
 .pill.bad { background: #ead9d4; }
 .pill.dead { background: #e8d3c4; color: var(--accent); }
+.pill.off { background: #ece7df; color: var(--muted); }
+.pill.need { background: #f3e2b8; color: #6a4b12; }
+.tag {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  padding: 0.05rem 0.35rem;
+}
+.why {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.75rem;
+  border: 1px solid var(--rule);
+  background: transparent;
+  padding: 0.2rem 0.4rem;
+  min-width: 10rem;
+}
+.chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.5rem 0 1rem; }
+.chip {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.72rem;
+  border: 1px solid var(--rule);
+  background: transparent;
+  padding: 0.2rem 0.5rem;
+  cursor: pointer;
+}
+.chip.on { border-color: var(--ink); background: var(--card); }
+.run-line { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.78rem; }
 
 .near-miss-list { list-style: decimal; padding-left: 1.25rem; }
 .near-miss-list li {

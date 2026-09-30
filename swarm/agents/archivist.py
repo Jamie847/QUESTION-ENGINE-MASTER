@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 
 from swarm.dedup import sample_near_miss_pairs
+from swarm.display_time import age_days_from_finished, run_header
 from swarm.settings import get_settings
 from swarm.staleness import digest_age_days, is_stale, last_run_label
+from swarm.taste import steering_label
 from swarm.models import (
     Brief,
     DigestDoc,
@@ -28,6 +30,10 @@ def render_digest(
     cost_usd: float,
     prior_questions: list[Question] | None = None,
     as_of: date | None = None,
+    run_id: int | None = None,
+    started_at: datetime | None = None,
+    finished_at: datetime | None = None,
+    status: str = "",
 ) -> DigestDoc:
     curated = sorted(
         [q for q in questions if q.status == QuestionStatus.curated],
@@ -39,10 +45,25 @@ def render_digest(
     accepted = [i for i in intersections if i.accepted]
     rejected = [i for i in intersections if not i.accepted]
     top = curated[:5]
+    model_n = sum(1 for q in questions if (q.written_by or "").startswith("model:"))
     lines: list[str] = [
         f"# Question Engine — {day.isoformat()}",
         "",
+        f"_{model_n} of {len(questions)} questions model-written._",
+        "",
     ]
+    if run_id and started_at is not None:
+        lines += [
+            run_header(
+                run_id=run_id,
+                started_at=started_at,
+                finished_at=finished_at,
+                tz_name=get_settings().display_tz,
+                cost_usd=cost_usd,
+                status=status,
+            ),
+            "",
+        ]
     if degraded:
         lines += [
             "> Degraded run. One or more sources or model calls failed; "
@@ -63,7 +84,7 @@ def render_digest(
         cov = inter.coverage.value
         lines.append(
             f"- **{' × '.join(inter.verticals)}** · surprise {inter.surprise:.2f} · "
-            f"coverage **{cov}** — {inter.thesis}"
+            f"coverage **{cov}** (model guess) — {inter.thesis}"
         )
         if inter.coverage_notes:
             lines.append(f"  - coverage note: {inter.coverage_notes}")
@@ -77,8 +98,13 @@ def render_digest(
     for key, qs in sorted(by_v.items()):
         lines.append(f"### {key}")
         for q in qs:
-            flag = f" · coverage {q.coverage.value}" if q.coverage.value != "unknown" else ""
-            lines.append(f"- {q.text} _{q.lens}{flag}_")
+            flag = (
+                f" · coverage (model guess) {q.coverage.value}"
+                if q.coverage.value != "unknown"
+                else ""
+            )
+            template = " · template" if q.written_by == "template" else ""
+            lines.append(f"- {q.text} _{q.lens}{flag}{template}_")
         lines.append("")
 
     lines += ["## Cross-pollinator passed over", ""]
@@ -150,13 +176,18 @@ def render_digest(
         for w in warnings:
             lines.append(f"- {w}")
         lines.append("")
-    age = digest_age_days(day, as_of=as_of)
+    if finished_at is not None:
+        age = age_days_from_finished(finished_at, get_settings().display_tz)
+    else:
+        age = digest_age_days(day, as_of=as_of)
     stale = is_stale(age, get_settings().stale_after_days)
     stale_note = " Digest is **stale**." if stale else ""
     lines.append(
         f"_{last_run_label(age).capitalize()}.{stale_note} "
         f"Runs are manual — there is no daily cron. "
-        f"Run cost ≈ ${cost_usd:.2f}. Coverage is shown, never used as promotion. "
+        f"Run cost ≈ ${cost_usd:.2f}. Coverage is a model guess, never a search, "
+        f"and is never used as promotion. "
+        f"{steering_label()} "
         f"Lexical duplicates marked: {len(duplicates)} of {len(questions)}. "
         f"That number counts token overlap only; it does not catch paraphrase._"
     )
@@ -198,7 +229,7 @@ def _question_block(
     lines = [
         f"### {n}. {q.text}",
         f"- Lens: {q.lens} · Verticals: {' × '.join(q.verticals) or '—'} · "
-        f"Coverage: **{q.coverage.value}** · Decay: {q.decay_class.value}",
+        f"Coverage (model guess): **{q.coverage.value}** · Decay: {q.decay_class.value}",
         f"- Context: {context or '—'}",
     ]
     if src_line:

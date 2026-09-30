@@ -16,6 +16,8 @@ from swarm.agents.smiths import run_smiths
 from swarm.budget import RunBudget
 from swarm.db import init_db, session_scope
 from swarm.dedup import mark_duplicates
+from swarm.display_time import digest_local_date
+from swarm.freshness import freshness_window_days
 from swarm.llm import LLM
 from swarm.lock import LockBusy, acquire_lock, release_lock
 from swarm.models import (
@@ -39,15 +41,9 @@ from swarm.orm import (
     SignalRow,
 )
 from swarm.settings import get_settings
-from swarm.sources import (
-    BraveSource,
-    FederalRegisterSource,
-    HackerNewsSource,
-    RedditSource,
-    WikipediaSource,
-    collect_signals,
-)
+from swarm.sources.base import collect_signals
 from swarm.sources.health import annotate_dead_sources
+from swarm.sources.registry import build_sources
 from swarm.taste import load_seed_profile
 
 logging.basicConfig(
@@ -159,20 +155,27 @@ def _execute(run_id: int) -> None:
 
     if StageName.fetch.value not in done:
         _set_stage(run_id, StageName.fetch)
-        sources = [
-            HackerNewsSource(),
-            RedditSource(),
-            WikipediaSource(),
-            BraveSource(),
-            FederalRegisterSource(),
-        ]
+        sources = build_sources()
+        window = freshness_window_days(
+            _last_archived_at(run_id), datetime.now(timezone.utc)
+        )
+        for src in sources:
+            src.freshness_days = window
         signals, health = _run_async(collect_signals(sources))
         health = annotate_dead_sources(health, _prior_source_health(run_id))
         _persist_signals(run_id, signals)
-        if not any(h.ok and h.count for h in health):
-            warnings.append("all live sources returned nothing; using seeded demo signals")
-            signals = _demo_signals()
-            _persist_signals(run_id, signals)
+        if not signals:
+            if settings.allow_demo_signals:
+                log.warning(
+                    "ALLOW_DEMO_SIGNALS=true — substituting demo signals. "
+                    "These are not today's sources and must not ship from Render."
+                )
+                warnings.append("ALLOW_DEMO_SIGNALS=true; demo signals substituted")
+                signals = _demo_signals()
+                _persist_signals(run_id, signals)
+            else:
+                _checkpoint(run_id, StageName.fetch, health=health, warnings=warnings)
+                raise RuntimeError("all sources dark")
         if any(not h.ok for h in health):
             warnings.append("one or more sources failed; run is degraded")
         for h in health:
@@ -191,6 +194,7 @@ def _execute(run_id: int) -> None:
         if not briefs:
             raise RuntimeError("scout produced no briefs")
         _persist_briefs(run_id, briefs)
+        _store_scout_seen(run_id, getattr(run_scouts, "seen_by_source", {}))
         _checkpoint(run_id, StageName.scout, warnings=warnings)
     else:
         briefs = _load_briefs(run_id)
@@ -228,6 +232,10 @@ def _execute(run_id: int) -> None:
         _set_stage(run_id, StageName.curate)
         llm.agent = "curator"
         questions = run_curator(questions, taste, llm)
+        curated_by = (
+            f"model:{settings.judgment_model}" if llm.available else "template"
+        )
+        _store_curated_by(run_id, curated_by)
         _persist_questions(run_id, questions, replace=True)
         _persist_kill_reasons(run_id, questions)
         _checkpoint(run_id, StageName.curate, warnings=warnings)
@@ -265,8 +273,19 @@ def _execute(run_id: int) -> None:
                 f"(cross-pollinator + curator)"
             )
         prior_questions = _prior_curated_questions(run_id)
+        started_at, _finished_prior = _run_times(run_id)
+        finished_at = datetime.now(timezone.utc)
+        day = (
+            digest_local_date(started_at, settings.display_tz)
+            if started_at is not None
+            else date.today()
+        )
+        status_preview = run_status_from(
+            degraded=degraded,
+            curated_count=sum(1 for q in questions if q.status == QuestionStatus.curated),
+        )
         doc = render_digest(
-            day=date.today(),
+            day=day,
             briefs=briefs,
             intersections=intersections,
             questions=questions,
@@ -275,6 +294,10 @@ def _execute(run_id: int) -> None:
             degraded=degraded,
             cost_usd=budget.spent_usd,
             prior_questions=prior_questions,
+            run_id=run_id,
+            started_at=started_at,
+            finished_at=finished_at,
+            status=status_preview.value,
         )
         _persist_digest(run_id, doc)
         status = run_status_from(degraded=degraded, curated_count=doc.curated_count)
@@ -386,6 +409,7 @@ def _persist_briefs(run_id: int, briefs: list[Brief]) -> None:
                     sources=b.sources,
                     raw_signals=b.raw_signals,
                     score=b.score,
+                    written_by=b.written_by,
                 )
             )
 
@@ -407,6 +431,7 @@ def _persist_intersections(run_id: int, items: list[Intersection]) -> None:
                     accepted=i.accepted,
                     reject_reason=i.reject_reason,
                     brief_ids=i.brief_ids,
+                    written_by=i.written_by,
                 )
             )
 
@@ -459,6 +484,8 @@ def _persist_questions(run_id: int, questions: list[Question], *, replace: bool)
                     brief_ids=q.brief_ids,
                     intersection_id=q.intersection_id,
                     context=q.context,
+                    provenance=q.provenance,
+                    written_by=q.written_by,
                 )
             )
 
@@ -521,6 +548,7 @@ def _load_briefs(run_id: int) -> list[Brief]:
                 sources=r.sources or [],
                 raw_signals=r.raw_signals or [],
                 score=r.score,
+                written_by=getattr(r, "written_by", "") or "",
             )
             for r in rows
         ]
@@ -545,6 +573,7 @@ def _load_intersections(run_id: int) -> list[Intersection]:
                 accepted=r.accepted,
                 reject_reason=r.reject_reason or "",
                 brief_ids=r.brief_ids or [],
+                written_by=getattr(r, "written_by", "") or "",
             )
             for r in rows
         ]
@@ -570,6 +599,8 @@ def _load_questions(run_id: int) -> list[Question]:
                 brief_ids=r.brief_ids or [],
                 intersection_id=r.intersection_id,
                 context=r.context or "",
+                provenance=getattr(r, "provenance", "") or "linked",
+                written_by=getattr(r, "written_by", "") or "",
             )
             for r in rows
         ]
@@ -665,6 +696,41 @@ def _rerender_digest(day: str | None) -> int:
     _persist_digest(run_id, doc)
     print(f"RERENDER_DIGEST_OK {doc.date} near_miss={len(doc.near_miss_pairs)}")
     return 0
+
+
+def _store_scout_seen(run_id: int, seen: dict) -> None:
+    with session_scope() as session:
+        row = session.get(RunRow, run_id)
+        if row:
+            row.scout_seen = dict(seen or {})
+
+
+def _store_curated_by(run_id: int, curated_by: str) -> None:
+    with session_scope() as session:
+        row = session.get(RunRow, run_id)
+        if row:
+            row.curated_by = curated_by
+
+
+def _run_times(run_id: int) -> tuple[datetime | None, datetime | None]:
+    with session_scope() as session:
+        row = session.get(RunRow, run_id)
+        if not row:
+            return None, None
+        return row.started_at, row.finished_at
+
+
+def _last_archived_at(run_id: int) -> datetime | None:
+    with session_scope() as session:
+        row = session.scalar(
+            select(RunRow)
+            .join(DigestRow, DigestRow.run_id == RunRow.id)
+            .where(RunRow.id != run_id)
+            .order_by(RunRow.id.desc())
+        )
+        if not row:
+            return None
+        return row.finished_at or row.started_at
 
 
 def _demo_signals() -> list[Signal]:

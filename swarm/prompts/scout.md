@@ -6,4 +6,6 @@ From the candidate headlines, produce 5–8 briefs. Drop celebrity noise, stock-
 
 Each brief must name who is affected and why this is now, not last year. Prefer accelerating or newly-inverted stories.
 
+Every brief must carry at least one specific from the source text: a name, number, date, agency, or mechanism. Cite the signals you used by their labels (S1, S2, …) in signal_refs. Do not invent a URL or a label that was not in the list.
+
 Return structured briefs only.

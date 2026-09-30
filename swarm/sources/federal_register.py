@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date, timedelta
 from typing import Any
 
 import httpx
@@ -11,6 +12,7 @@ from swarm.models import Signal
 from swarm.settings import get_settings
 from swarm.sources.base import SourceAdapter
 from swarm.sources.routing import hint_verticals
+from swarm.sources.snippets import clip_snippet
 
 
 def extract_documents(payload: dict[str, Any]) -> list[dict[str, Any]]:
@@ -37,12 +39,14 @@ class FederalRegisterSource(SourceAdapter):
         signals: list[Signal] = []
         async with httpx.AsyncClient(timeout=settings.source_timeout_s, headers=headers) as client:
             for query in queries:
+                since = date.today() - timedelta(days=max(1, self.freshness_days))
                 resp = await client.get(
                     "https://www.federalregister.gov/api/v1/documents.json",
                     params={
                         "per_page": 8,
                         "order": "newest",
                         "conditions[term]": query,
+                        "conditions[publication_date][gte]": since.isoformat(),
                     },
                 )
                 resp.raise_for_status()
@@ -51,15 +55,13 @@ class FederalRegisterSource(SourceAdapter):
                     if not title:
                         continue
                     url = item.get("html_url") or item.get("pdf_url") or ""
-                    snippet = (item.get("abstract") or item.get("excerpts") or "")[:400]
-                    if isinstance(snippet, list):
-                        snippet = " ".join(str(s) for s in snippet)[:400]
+                    snippet = clip_snippet(item.get("abstract") or item.get("excerpts") or "")
                     signals.append(
                         Signal(
                             source=self.name,
                             title=title,
                             url=str(url),
-                            snippet=str(snippet),
+                            snippet=snippet,
                             score=1.1,
                             vertical_hints=hint_verticals(title, verticals()),
                             raw={

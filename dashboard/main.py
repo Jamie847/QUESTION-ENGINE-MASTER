@@ -15,12 +15,21 @@ from sqlalchemy import func, select
 
 from swarm.config import lenses, verticals
 from swarm.db import init_db, ping_db, session_scope
+from swarm.display_time import age_days_from_finished, format_duration, format_run_stamp
 from swarm.dedup import sample_near_miss_pairs
 from swarm.lock import current_lock
 from swarm.publish_gate import gate_reasons, publish_gate_open
 from swarm.staleness import digest_age_days, is_stale, last_run_label
 from swarm.models import Coverage, DecayClass, Question, QuestionStatus
-from swarm.orm import DigestRow, IntersectionRow, IssueRow, QuestionRow, RatingRow, RunRow
+from swarm.orm import (
+    BriefRow,
+    DigestRow,
+    IntersectionRow,
+    IssueRow,
+    QuestionRow,
+    RatingRow,
+    RunRow,
+)
 from swarm.settings import get_settings
 from dashboard.public_text import public_page_text, public_run_error, public_warning
 from dashboard.run_limits import (
@@ -28,11 +37,26 @@ from dashboard.run_limits import (
     refuse_if_cooling_down,
     refuse_if_over_ceiling,
 )
-from swarm.taste import load_seed_profile
+from swarm.sources.registry import missing_keys
+from swarm.taste import load_taste, steering_label
 from swarm.voice import voice_is_filled
 
 APP_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(APP_DIR / "templates"))
+
+
+def _fmt_stamp(dt: datetime | None) -> str:
+    if dt is None:
+        return "—"
+    return format_run_stamp(dt, get_settings().display_tz)
+
+
+def _fmt_duration(started: datetime | None, finished: datetime | None) -> str:
+    return format_duration(started, finished)
+
+
+templates.env.globals["fmt_stamp"] = _fmt_stamp
+templates.env.globals["fmt_duration"] = _fmt_duration
 log = logging.getLogger("dashboard")
 
 _run_thread: threading.Thread | None = None
@@ -168,7 +192,60 @@ def _question_from_row(row: QuestionRow) -> Question:
         brief_ids=list(row.brief_ids or []),
         intersection_id=row.intersection_id,
         context=row.context or "",
+        provenance=getattr(row, "provenance", "") or "pre-wo006",
+        written_by=getattr(row, "written_by", "") or "",
     )
+
+
+def _decorate_questions(session, questions: list[QuestionRow]) -> dict[str, BriefRow]:
+    ids: list[str] = []
+    for question in questions:
+        ids.extend(list(question.brief_ids or []))
+    briefs: dict[str, BriefRow] = {}
+    if ids:
+        for brief in session.scalars(select(BriefRow).where(BriefRow.id.in_(ids))).all():
+            briefs[brief.id] = brief
+    for question in questions:
+        provenance = getattr(question, "provenance", None) or "pre-wo006"
+        question.provenance = provenance
+        if provenance in {"unlinked", "pre-wo006"}:
+            question.from_line = "sources not recorded"
+            question.from_links = []
+            continue
+        links = []
+        for brief_id in list(question.brief_ids or [])[:3]:
+            brief = briefs.get(brief_id)
+            if not brief:
+                continue
+            sources = list(brief.sources or [])
+            names = list(brief.raw_signals or [])
+            links.append(
+                {
+                    "headline": brief.headline,
+                    "url": sources[0] if sources else "",
+                    "source": names[0] if names else "",
+                }
+            )
+        question.from_line = ""
+        question.from_links = links
+    return briefs
+
+
+def _read_line(run: RunRow | None) -> str:
+    if run is None:
+        return ""
+    seen = dict(run.scout_seen or {})
+    parts: list[str] = []
+    for item in run.source_health or []:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("source") or "")
+        fetched = item.get("count", 0)
+        if name in seen:
+            parts.append(f"{name}: {fetched} fetched, {seen[name]} read")
+        else:
+            parts.append(f"{name}: {fetched} fetched")
+    return " · ".join(parts)
 
 
 def _prior_day_curated(current_date: str | None) -> list[Question]:
@@ -206,6 +283,7 @@ def today(request: Request):
     questions: list[QuestionRow] = []
     ratings: dict[str, int] = {}
     intersections: list[IntersectionRow] = []
+    brief_rows: list[BriefRow] = []
     run: RunRow | None = None
     if digest:
         with session_scope() as session:
@@ -228,12 +306,18 @@ def today(request: Request):
                     select(IntersectionRow).where(IntersectionRow.run_id == digest.run_id)
                 ).all()
             )
+            brief_rows = list(
+                session.scalars(select(BriefRow).where(BriefRow.run_id == digest.run_id)).all()
+            )
+            _decorate_questions(session, questions)
             if run:
                 session.expunge(run)
             for q in questions:
                 session.expunge(q)
             for i in intersections:
                 session.expunge(i)
+            for b in brief_rows:
+                session.expunge(b)
     curated = sorted(
         [q for q in questions if q.status == "curated"],
         key=lambda q: q.rank or 99,
@@ -251,7 +335,22 @@ def today(request: Request):
         prior_curated,
     )
     settings = get_settings()
-    age_days = digest_age_days(digest.date) if digest else None
+    if run and run.finished_at:
+        age_days = age_days_from_finished(run.finished_at, settings.display_tz)
+    else:
+        age_days = digest_age_days(digest.date) if digest else None
+    briefs_by_vertical: dict[str, list] = {}
+    for brief in brief_rows:
+        briefs_by_vertical.setdefault(brief.vertical, []).append(brief)
+    ran_verticals = sorted(briefs_by_vertical)
+    ran_lenses = sorted({q.lens for q in questions})
+    bank_groups = []
+    for vertical in verticals():
+        items = [q for q in bank if vertical["id"] in (q.verticals or [])]
+        if items:
+            bank_groups.append(
+                {"id": vertical["id"], "name": vertical["name"], "questions": items}
+            )
     if digest and digest.warnings:
         digest.warnings = [public_warning(str(w)) for w in digest.warnings]
     return templates.TemplateResponse(
@@ -276,6 +375,13 @@ def today(request: Request):
             if age_days is not None
             else False,
             "stale_after_days": settings.stale_after_days,
+            "briefs_by_vertical": briefs_by_vertical,
+            "read_line": _read_line(run),
+            "ran_verticals": ran_verticals,
+            "ran_lenses": ran_lenses,
+            "steering": steering_label(),
+            "verticals": verticals(),
+            "bank_groups": bank_groups,
         },
     )
 
@@ -288,25 +394,39 @@ def archive(
     vertical: str = "",
     coverage: str = "",
     rating: str = "",
+    saved: str = "",
 ):
     with session_scope() as session:
-        stmt = select(QuestionRow).where(QuestionRow.status == "curated")
-        if q:
-            stmt = stmt.where(QuestionRow.text.ilike(f"%{q}%"))
-        if lens:
-            stmt = stmt.where(QuestionRow.lens == lens)
-        if coverage:
-            stmt = stmt.where(QuestionRow.coverage == coverage)
-        rows = list(session.scalars(stmt.order_by(QuestionRow.created_at.desc())).all())
-        if vertical:
-            rows = [r for r in rows if vertical in (r.verticals or [])]
+        if saved == "1":
+            stmt = select(QuestionRow).where(QuestionRow.promoted.is_(True))
+            rows = list(
+                session.scalars(stmt.order_by(QuestionRow.promoted_at.desc())).all()
+            )
+        else:
+            stmt = select(QuestionRow).where(QuestionRow.status == "curated")
+            if q:
+                stmt = stmt.where(QuestionRow.text.ilike(f"%{q}%"))
+            if lens:
+                stmt = stmt.where(QuestionRow.lens == lens)
+            if coverage:
+                stmt = stmt.where(QuestionRow.coverage == coverage)
+            rows = list(session.scalars(stmt.order_by(QuestionRow.created_at.desc())).all())
+            if vertical:
+                rows = [r for r in rows if vertical in (r.verticals or [])]
         rating_map = {
             r.question_id: r.stars
             for r in session.scalars(select(RatingRow)).all()
         }
-        if rating.isdigit():
+        if rating.isdigit() and saved != "1":
             want = int(rating)
             rows = [r for r in rows if rating_map.get(r.id) == want]
+        _decorate_questions(session, rows)
+        run_ids = {r.run_id for r in rows}
+        run_rows = []
+        if run_ids:
+            run_rows = list(
+                session.scalars(select(RunRow).where(RunRow.id.in_(run_ids))).all()
+            )
         digests = list(
             session.scalars(
                 select(DigestRow).order_by(
@@ -318,6 +438,8 @@ def archive(
             session.expunge(r)
         for d in digests:
             session.expunge(d)
+        for run in run_rows:
+            session.expunge(run)
     return templates.TemplateResponse(
         request,
         "archive.html",
@@ -333,13 +455,15 @@ def archive(
             "rating": rating,
             "lenses": lenses(),
             "verticals": verticals(),
+            "saved": saved,
+            "run_dates": {r.id: r.started_at for r in run_rows},
         },
     )
 
 
 @app.get("/taste", response_class=HTMLResponse)
 def taste_page(request: Request):
-    profile = load_seed_profile()
+    profile, taste_source = load_taste()
     with session_scope() as session:
         rated = list(
             session.execute(
@@ -373,6 +497,7 @@ def taste_page(request: Request):
             "lens_avgs": lens_avgs,
             "lexical_duplicate_count": dup_n,
             "curated_count": curated_n,
+            "steering": steering_label(taste_source),
         },
     )
 
@@ -452,6 +577,7 @@ def controls(request: Request):
             "verticals": verticals(),
             "lenses": lenses(),
             "settings": get_settings(),
+            "missing_keys": missing_keys(),
         },
     )
 
@@ -531,6 +657,7 @@ def digest_day(request: Request, day: str):
 
 class RatingIn(BaseModel):
     stars: int = Field(ge=1, le=5)
+    why: str | None = None
 
 
 @app.post("/api/questions/{question_id}/rating")
@@ -544,9 +671,17 @@ def rate_question(question_id: str, body: RatingIn):
         )
         if existing:
             existing.stars = body.stars
+            if body.why is not None:
+                existing.why = body.why.strip()
             existing.updated_at = datetime.now(timezone.utc)
         else:
-            session.add(RatingRow(question_id=question_id, stars=body.stars))
+            session.add(
+                RatingRow(
+                    question_id=question_id,
+                    stars=body.stars,
+                    why=(body.why or "").strip(),
+                )
+            )
     return {"ok": True, "stars": body.stars}
 
 
@@ -557,10 +692,8 @@ def promote_question(question_id: str):
         if not q:
             raise HTTPException(404, "Unknown question")
         q.promoted = True
-        if q.status != "curated":
-            q.status = "curated"
-            q.rank = q.rank or 50
-    return {"ok": True}
+        q.promoted_at = datetime.now(timezone.utc)
+    return {"ok": True, "status": q.status}
 
 
 @app.post("/api/run")

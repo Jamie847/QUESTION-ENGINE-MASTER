@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <entry>
+    <id>https://arxiv.org/abs/2609.00001v1</id>
+    <title>A named lattice measured at 3.2 kelvin</title>
+    <summary>The facility recorded 3.2 kelvin on 2026-09-01 using a specific phonon mechanism.</summary>
+    <link rel="alternate" href="https://arxiv.org/abs/2609.00001"/>
+  </entry>
+</feed>

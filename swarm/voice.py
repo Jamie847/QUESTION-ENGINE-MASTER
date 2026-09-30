@@ -35,10 +35,15 @@ def voice_is_filled() -> bool:
 
 
 def taste_seed_is_filled() -> bool:
-    """Operator-authored taste only. The stand-in at data/taste_seed.yaml does not count."""
+    """Operator-authored taste only. The stand-in at data/taste_seed.yaml does not count.
+
+    Ratings that have crossed the keep/kill threshold count as the Operator's seed.
+    """
     if TASTE_YAML.exists() and TASTE_YAML.stat().st_size > 0:
         return True
     for path in TASTE_MD_ALIASES:
         if path.exists() and _block(path.read_text(encoding="utf-8"), "TASTE"):
             return True
-    return False
+    from swarm.taste import ratings_seed_ready
+
+    return ratings_seed_ready()

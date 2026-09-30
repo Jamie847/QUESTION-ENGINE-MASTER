@@ -25,10 +25,20 @@ envVarGroups:
         sync: false
       - key: PERPLEXITY_API_KEY
         sync: false
-      - key: REDDIT_CLIENT_ID
+      - key: OPENALEX_API_KEY
         sync: false
-      - key: REDDIT_CLIENT_SECRET
+      - key: REGULATIONS_GOV_API_KEY
         sync: false
+      - key: SAM_GOV_API_KEY
+        sync: false
+      - key: DISPLAY_TZ
+        value: "UTC"
+      - key: SNIPPET_CHARS
+        value: "800"
+      - key: SCOUT_SIGNALS_PER_VERTICAL
+        value: "30"
+      - key: BRAVE_MIN_INTERVAL_S
+        value: "1.1"
       # Kept for DASHBOARD_AUTH=on. No generateValue — the Blueprint
       # must not mint a string nobody uses. Do not set value: "".
       - key: DASHBOARD_TOKEN

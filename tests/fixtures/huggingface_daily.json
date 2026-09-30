@@ -1,0 +1,12 @@
+[
+  {
+    "title": "Daily wrapper title",
+    "summary": "wrapper summary",
+    "paper": {
+      "id": "2609.36322",
+      "title": "A paper with a counted result",
+      "summary": "Authors at Lab X report 3.2 percent on a named benchmark.",
+      "upvotes": 12
+    }
+  }
+]

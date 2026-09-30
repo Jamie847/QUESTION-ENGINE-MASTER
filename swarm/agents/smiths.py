@@ -34,9 +34,18 @@ SCHEMA = {
                         "enum": ["fast", "slow", "evergreen"],
                     },
                     "context": {"type": "string"},
-                    "intersection_thesis": {"type": "string"},
+                    "intersection_ref": {"type": "string"},
+                    "brief_refs": {"type": "array", "items": {"type": "string"}},
                 },
-                "required": ["text", "verticals", "coverage", "decay_class", "context"],
+                "required": [
+                    "text",
+                    "verticals",
+                    "coverage",
+                    "decay_class",
+                    "context",
+                    "intersection_ref",
+                    "brief_refs",
+                ],
             },
         }
     },
@@ -60,6 +69,29 @@ TEMPLATES = {
         "Who is the ignored buyer created by {a}, and what is the weekend experiment that would find them?",
     ],
 }
+
+
+def format_smith_block(briefs: list[Brief], intersections: list[Intersection]) -> str:
+    """Whole briefs, labelled. Smiths cite B1… and I1…; code maps those to ids."""
+    bits = ["BRIEFS:"]
+    for i, brief in enumerate(briefs, start=1):
+        bits.append(
+            f"- B{i} [{brief.vertical}] {brief.headline}\n"
+            f"  what is happening: {brief.what_is_happening}\n"
+            f"  why now: {brief.why_now}\n"
+            f"  who is affected: {brief.who_is_affected}"
+        )
+    bits.append("INTERSECTIONS:")
+    for i, inter in enumerate(intersections, start=1):
+        bits.append(
+            f"- I{i} {' × '.join(inter.verticals)} "
+            f"({inter.coverage.value} coverage, surprise={inter.surprise:.2f}): {inter.thesis}"
+        )
+    bits.append(
+        "Cite intersection_ref as one of I1… or none. Cite brief_refs as B1…. "
+        "Do not invent labels."
+    )
+    return "\n".join(bits)
 
 
 def run_smiths(
@@ -95,40 +127,53 @@ def _llm(
         lens_essence=lens["essence"].strip(),
         taste=profile_for_prompt(taste),
     )
-    user_bits = ["BRIEFS:"]
-    user_bits.extend(f"- [{b.vertical}] {b.headline}" for b in briefs[:16])
-    user_bits.append("INTERSECTIONS:")
-    user_bits.extend(
-        f"- {' × '.join(i.verticals)} ({i.coverage.value} coverage, surprise={i.surprise:.2f}): {i.thesis}"
-        for i in intersections[:10]
-    )
+    user = format_smith_block(briefs, intersections)
     data = llm.complete_json(
         system=system,
-        user="\n".join(user_bits),
+        user=user,
         schema=SCHEMA,
         max_tokens=4000,
     )
     if not data:
         return None
+    label_i = {f"I{i}": inter for i, inter in enumerate(intersections, start=1)}
+    label_b = {f"B{i}": brief for i, brief in enumerate(briefs, start=1)}
+    writer = llm.writer_name()
     out: list[Question] = []
     for raw in data.get("questions") or []:
         try:
             text = raw["text"]
-            inter = next(
-                (i for i in intersections if i.thesis == raw.get("intersection_thesis")),
-                intersections[0] if intersections else None,
-            )
+            ref = str(raw.get("intersection_ref") or "").strip()
+            inter = label_i.get(ref)
+            if inter is None:
+                intersection_id = None
+                brief_ids: list[str] = []
+                provenance = "unlinked"
+                verticals = raw.get("verticals") or []
+                coverage = Coverage(raw.get("coverage") or "unknown")
+            else:
+                intersection_id = inter.id
+                brief_ids = []
+                for token in raw.get("brief_refs") or []:
+                    brief = label_b.get(str(token).strip())
+                    if brief and brief.id not in brief_ids:
+                        brief_ids.append(brief.id)
+                provenance = "linked"
+                verticals = raw.get("verticals") or inter.verticals
+                coverage = Coverage(raw.get("coverage") or inter.coverage.value)
             out.append(
                 Question(
                     id=f"r{run_id}-{lens['id']}-{slug(text)}",
                     text=text,
                     lens=lens["id"],
-                    verticals=raw.get("verticals") or (inter.verticals if inter else []),
-                    coverage=Coverage(raw.get("coverage") or (inter.coverage.value if inter else "unknown")),
+                    verticals=verticals,
+                    coverage=coverage,
                     decay_class=DecayClass(raw.get("decay_class") or "slow"),
-                    brief_ids=inter.brief_ids if inter else [],
-                    intersection_id=inter.id if inter else None,
+                    brief_ids=brief_ids,
+                    intersection_id=intersection_id,
                     context=raw.get("context") or "",
+                    provenance=provenance,
+                    written_by=writer,
                 )
             )
         except Exception:
@@ -150,6 +195,7 @@ def _fallback(
             plausibility=0.5,
             coverage=Coverage.unknown,
             brief_ids=[briefs[0].id] if briefs else [],
+            written_by="template",
         )
     ]
     used_briefs: set[str] = set()
@@ -171,12 +217,13 @@ def _fallback(
                 verticals=inter.verticals,
                 coverage=inter.coverage,
                 decay_class=DecayClass.slow,
-                brief_ids=inter.brief_ids,
+                brief_ids=list(inter.brief_ids or []),
                 intersection_id=inter.id,
                 context=inter.thesis,
+                provenance="linked",
+                written_by="template",
             )
         )
-    # One extra question per unused top brief so the bank is not just pairings.
     leftovers = [b for b in briefs if b.id not in used_briefs][:3]
     single = templates[0]
     for brief in leftovers:
@@ -192,6 +239,8 @@ def _fallback(
                 decay_class=DecayClass.slow,
                 brief_ids=[brief.id],
                 context=brief.why_now,
+                provenance="linked",
+                written_by="template",
             )
         )
     return out

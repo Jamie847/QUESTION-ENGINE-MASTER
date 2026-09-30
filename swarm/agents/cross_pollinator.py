@@ -99,6 +99,7 @@ def _llm(briefs: list[Brief], llm: LLM, run_id: int) -> list[Intersection] | Non
                     accepted=bool(raw.get("accepted")),
                     reject_reason=raw.get("reject_reason") or "",
                     brief_ids=brief_ids,
+                    written_by=llm.writer_name(judgment=True),
                 )
             )
         except Exception:
@@ -175,6 +176,7 @@ def _fallback(briefs: list[Brief], run_id: int) -> list[Intersection]:
                 accepted=accept,
                 reject_reason=reason,
                 brief_ids=[x.id, y.id],
+                written_by="template",
             )
             (accepted if item.accepted else rejected).append(item)
     if not accepted and rejected:
@@ -205,6 +207,7 @@ def _obvious_rejects(briefs: list[Brief], run_id: int = 0) -> list[Intersection]
             accepted=False,
             reject_reason="headline-level pairing with no mechanism",
             brief_ids=[a.id, b.id],
+            written_by="template",
         )
     ]
 

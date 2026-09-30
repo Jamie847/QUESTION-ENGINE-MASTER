@@ -30,9 +30,22 @@
   <h2>Verticals &amp; lenses (Phase 1)</h2>
   <p class="hint">Thinner swarm on purpose. Edit <code>swarm/config/*.yaml</code> to add more — no new Python.</p>
   <ul class="stats">
-    {% for v in verticals %}<li>Vertical <strong>{{ v.name }}</strong></li>{% endfor %}
-    {% for ln in lenses %}<li>Lens <strong>{{ ln.name }}</strong></li>{% endfor %}
+    {% for v in verticals %}
+    <li>
+      Vertical <strong>{{ v.name }}</strong>
+      <div class="muted">search: {{ (v.search_queries or []) | join(" · ") }}</div>
+      {% if v.arxiv_categories %}<div class="muted">arXiv: {{ v.arxiv_categories | join(", ") }}</div>{% endif %}
+      {% if v.openalex_terms %}<div class="muted">OpenAlex: {{ v.openalex_terms | join(" · ") }}</div>{% endif %}
+      {% if v.sam_keywords %}<div class="muted">SAM: {{ v.sam_keywords | join(" · ") }}{% if v.sam_naics %} · NAICS {{ v.sam_naics | join(", ") }}{% endif %}</div>{% endif %}
+    </li>
+    {% endfor %}
+    {% for ln in lenses %}
+    <li>Lens <strong>{{ ln.name }}</strong><div class="muted">{{ ln.essence }}</div></li>
+    {% endfor %}
   </ul>
+  {% if missing_keys %}
+  <p class="st-failed">Needs key: {{ missing_keys | join(", ") }}. The run continues without them.</p>
+  {% endif %}
 </section>
 
 <section>
@@ -42,7 +55,7 @@
   {% endif %}
   <table class="runs">
     <thead>
-      <tr><th>ID</th><th>Status</th><th>Stage</th><th>Cost</th><th>Started</th><th>Health</th></tr>
+      <tr><th>ID</th><th>Status</th><th>Stage</th><th>Cost</th><th>Start, finish, duration</th><th>Health</th></tr>
     </thead>
     <tbody>
       {% for r in runs %}
@@ -51,10 +64,15 @@
         <td class="st-{{ r.status }}">{{ r.status }}</td>
         <td>{{ r.current_stage }}</td>
         <td>${{ "%.2f"|format(r.cost_usd or 0) }}</td>
-        <td>{{ r.started_at }}</td>
+        <td>{{ fmt_stamp(r.started_at) }} → {{ fmt_stamp(r.finished_at) }} · {{ fmt_duration(r.started_at, r.finished_at) }}</td>
         <td>
           {% for h in (r.source_health or []) %}
-          <span class="pill {% if h.dead %}dead{% elif h.ok %}ok{% else %}bad{% endif %}">{{ h.source }} {{ h.count }}{% if h.dead %} dead{% if h.last_ok %} · {{ h.last_ok }}{% endif %}{% endif %}</span>
+          <span class="pill {% if h.error == 'off' %}off{% elif h.error == 'needs key' %}need{% elif h.dead %}dead{% elif h.ok %}ok{% else %}bad{% endif %}">
+            {{ h.source }}
+            {% if h.error == 'off' %}off{% elif h.error == 'needs key' %}needs key{% else %}{{ h.count }}{% endif %}
+            {% if h.dead %} dead{% if h.last_ok %} · {{ h.last_ok }}{% endif %}{% endif %}
+            {% if h.rate_limited %} · 429 {{ h.rate_limited | join('; ') }}{% elif h.error and h.error not in ['off', 'needs key'] %} · {{ h.error }}{% endif %}
+          </span>
           {% endfor %}
           {% if r.error %}<div class="muted">{{ r.error }}</div>{% endif %}
         </td>

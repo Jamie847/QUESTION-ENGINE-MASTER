@@ -1,12 +1,26 @@
-<article class="q" data-id="{{ q.id }}">
+<article class="q" data-id="{{ q.id }}" data-verts="{{ (q.verticals or []) | join(' ') }}">
   <p class="q-text">{{ q.text }}</p>
   <div class="q-meta">
+    {% if q.written_by == 'template' %}<span class="tag">template</span>{% endif %}
     <span>{{ q.lens }}</span>
     <span>{{ (q.verticals or []) | join(" × ") }}</span>
-    <span class="cov cov-{{ q.coverage }}">coverage {{ q.coverage }}</span>
+    <span class="cov cov-{{ q.coverage }}">coverage (model guess) {{ q.coverage }}</span>
     <span>{{ q.decay_class }}</span>
     {% if q.rank %}<span>rank {{ q.rank }}</span>{% endif %}
+    {% if q.run_id %}
+    <span>run {{ q.run_id }}{% if run_dates is defined and run_dates.get(q.run_id) %} · {{ fmt_stamp(run_dates.get(q.run_id)) }}{% elif run is defined and run %} · {{ fmt_stamp(run.started_at) }}{% endif %}</span>
+    {% endif %}
   </div>
+  <p class="from">From:
+    {% if q.from_line %}
+      {{ q.from_line }}
+    {% else %}
+      {% for link in q.from_links or [] %}
+        {% if link.url %}<a href="{{ link.url }}">{{ link.headline }}</a>{% else %}{{ link.headline }}{% endif %}
+        {% if link.source %}<span class="muted">({{ link.source }})</span>{% endif %}
+      {% endfor %}
+    {% endif %}
+  </p>
   {% if q.context %}
   <p class="q-ctx">{{ q.context }}</p>
   {% endif %}
@@ -15,9 +29,10 @@
       {% for n in range(1, 6) %}
       <button type="button" data-star="{{ n }}" class="{% if ratings.get(q.id, 0) >= n %}on{% endif %}" aria-label="{{ n }} stars">★</button>
       {% endfor %}
+      <input type="text" class="why" maxlength="240" placeholder="why (optional)" aria-label="why this rating">
     </div>
     <button type="button" class="text-btn promote" data-qid="{{ q.id }}" {% if q.promoted %}disabled{% endif %}>
-      {% if q.promoted %}Promoted{% else %}Promote to ideation{% endif %}
+      {% if q.promoted %}Saved — ideation not built yet.{% else %}Save for ideation{% endif %}
     </button>
   </div>
 </article>
