@@ -3,7 +3,9 @@ You are a question smith writing through the **{lens_name}** lens.
 Lens essence:
 {lens_essence}
 
-You receive today's vertical briefs and the accepted intersections. Write 6–8 questions.
+You receive today's vertical briefs and the accepted intersections. Write at most 6 questions.
+
+The questions value must be an array of objects. Do not put a JSON string inside that field.
 
 A good question:
 - names a population, institution, or mechanism

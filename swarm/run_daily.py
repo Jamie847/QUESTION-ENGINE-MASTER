@@ -8,12 +8,13 @@ from typing import Any
 
 from sqlalchemy import select
 
-from swarm.agents.archivist import render_digest, run_status_from
+from swarm.agents.archivist import lens_label, render_digest, run_status_from
 from swarm.agents.cross_pollinator import run_cross_pollinator
 from swarm.agents.curator import run_curator
 from swarm.agents.scout import run_scouts
 from swarm.agents.smiths import run_smiths
 from swarm.budget import RunBudget
+from swarm.config import lenses
 from swarm.db import init_db, session_scope
 from swarm.dedup import mark_duplicates
 from swarm.display_time import digest_local_date
@@ -150,6 +151,7 @@ def _execute(run_id: int) -> None:
     briefs: list[Brief] = []
     intersections: list[Intersection] = []
     questions: list[Question] = []
+    lens_reports: list[dict] = []
 
     done = _completed_stages(run_id)
 
@@ -211,8 +213,13 @@ def _execute(run_id: int) -> None:
     if StageName.smith.value not in done:
         _set_stage(run_id, StageName.smith)
         llm.agent = "smiths"
-        questions = run_smiths(briefs, intersections, taste, llm, run_id=run_id)
-        if not questions:
+        questions, lens_reports = run_smiths(briefs, intersections, taste, llm, run_id=run_id)
+        for report in lens_reports:
+            if report.get("model_count") == 0 and report.get("reason"):
+                warnings.append(
+                    f"{lens_label(report['lens'])}: no questions ({report['reason']})"
+                )
+        if not questions and not any(report.get("reason") for report in lens_reports):
             raise RuntimeError("smiths produced no questions")
         _persist_questions(run_id, questions, replace=True)
         _checkpoint(run_id, StageName.smith, warnings=warnings)
@@ -298,6 +305,7 @@ def _execute(run_id: int) -> None:
             started_at=started_at,
             finished_at=finished_at,
             status=status_preview.value,
+            lens_reports=lens_reports,
         )
         _persist_digest(run_id, doc)
         status = run_status_from(degraded=degraded, curated_count=doc.curated_count)
@@ -648,6 +656,29 @@ def _prior_curated_questions(run_id: int, *, as_of: date | None = None) -> list[
     ]
 
 
+def _lens_reports_from_archive(questions: list[Question], warnings: list[str]) -> list[dict]:
+    """Rebuild the per-lens header when a stored digest is rewritten."""
+    reasons: dict[str, str] = {}
+    for warning in warnings:
+        marker = ": no questions ("
+        if marker not in warning or not warning.endswith(")"):
+            continue
+        label, rest = warning.split(marker, 1)
+        reasons[label.replace("-", "_")] = rest[:-1]
+    counts: dict[str, int] = {}
+    for question in questions:
+        if (question.written_by or "").startswith("model:"):
+            counts[question.lens] = counts.get(question.lens, 0) + 1
+    return [
+        {
+            "lens": lens["id"],
+            "model_count": counts.get(lens["id"], 0),
+            "reason": reasons.get(lens["id"], ""),
+        }
+        for lens in lenses()
+    ]
+
+
 def _rerender_digest(day: str | None) -> int:
     """Rewrite stored markdown so a download matches the current archivist."""
     with session_scope() as session:
@@ -692,6 +723,7 @@ def _rerender_digest(day: str | None) -> int:
         degraded=degraded,
         cost_usd=cost,
         prior_questions=prior,
+        lens_reports=_lens_reports_from_archive(questions, warnings),
     )
     _persist_digest(run_id, doc)
     print(f"RERENDER_DIGEST_OK {doc.date} near_miss={len(doc.near_miss_pairs)}")

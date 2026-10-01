@@ -192,6 +192,9 @@ class AgentCallRow(Base):
     cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
     latency_ms: Mapped[int] = mapped_column(Integer, default=0)
     error: Mapped[str] = mapped_column(Text, default="")
+    stop_reason: Mapped[str] = mapped_column(String(64), default="")
+    parsed_count: Mapped[int | None] = mapped_column(Integer)
+    dropped_count: Mapped[int | None] = mapped_column(Integer)
     input_text: Mapped[str] = mapped_column(Text, default="")
     output_text: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(

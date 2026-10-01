@@ -18,6 +18,28 @@ from swarm.models import (
 )
 
 
+def lens_label(lens_id: str) -> str:
+    """Digest wording uses the lens id with hyphens: second-order, not second_order."""
+    return str(lens_id or "").replace("_", "-")
+
+
+def _lens_clause(reports: list[dict] | None) -> str:
+    if not reports:
+        return ""
+    bits: list[str] = []
+    for report in reports:
+        count = int(report.get("model_count") or 0)
+        reason = str(report.get("reason") or "")
+        lens = lens_label(str(report.get("lens") or ""))
+        if count == 0 and reason:
+            bits.append(f"{lens}: no questions ({reason})")
+        elif count:
+            bits.append(f"{lens} {count}")
+    if not bits:
+        return ""
+    return " " + " · ".join(bits)
+
+
 def render_digest(
     *,
     day: date,
@@ -34,6 +56,7 @@ def render_digest(
     started_at: datetime | None = None,
     finished_at: datetime | None = None,
     status: str = "",
+    lens_reports: list[dict] | None = None,
 ) -> DigestDoc:
     curated = sorted(
         [q for q in questions if q.status == QuestionStatus.curated],
@@ -49,7 +72,7 @@ def render_digest(
     lines: list[str] = [
         f"# Question Engine — {day.isoformat()}",
         "",
-        f"_{model_n} of {len(questions)} questions model-written._",
+        f"_{model_n} of {len(questions)} questions model-written.{_lens_clause(lens_reports)}_",
         "",
     ]
     if run_id and started_at is not None:

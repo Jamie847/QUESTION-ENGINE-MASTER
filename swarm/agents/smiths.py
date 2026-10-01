@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from swarm.config import lenses
@@ -71,6 +72,110 @@ TEMPLATES = {
 }
 
 
+def select_by_vertical(items: list, limit: int, vertical_of) -> list:
+    """Take turns across verticals so a cap cannot drop whoever is last in the list."""
+    if limit <= 0 or not items:
+        return []
+    order: list[str] = []
+    buckets: dict[str, list] = {}
+    for item in items:
+        vertical = vertical_of(item) or "_"
+        if vertical not in buckets:
+            order.append(vertical)
+            buckets[vertical] = []
+        buckets[vertical].append(item)
+    cursors = {vertical: 0 for vertical in order}
+    chosen: list = []
+    while len(chosen) < limit:
+        progressed = False
+        for vertical in order:
+            index = cursors[vertical]
+            bucket = buckets[vertical]
+            if index >= len(bucket):
+                continue
+            chosen.append(bucket[index])
+            cursors[vertical] = index + 1
+            progressed = True
+            if len(chosen) >= limit:
+                break
+        if not progressed:
+            break
+    return chosen
+
+
+def select_intersections(intersections: list[Intersection], limit: int) -> list[Intersection]:
+    """One intersection from each vertical in turn, then repeat, up to `limit`."""
+    if limit <= 0 or not intersections:
+        return []
+    order: list[str] = []
+    for inter in intersections:
+        for vertical in inter.verticals or ["_"]:
+            if vertical not in order:
+                order.append(vertical)
+    cursors = {vertical: 0 for vertical in order}
+    chosen: list[Intersection] = []
+    seen: set[str] = set()
+    while len(chosen) < limit:
+        progressed = False
+        for vertical in order:
+            while cursors[vertical] < len(intersections):
+                inter = intersections[cursors[vertical]]
+                cursors[vertical] += 1
+                if vertical in (inter.verticals or []) and inter.id not in seen:
+                    chosen.append(inter)
+                    seen.add(inter.id)
+                    progressed = True
+                    break
+            if len(chosen) >= limit:
+                break
+        if not progressed:
+            break
+    return chosen
+
+
+def prepare_smith_inputs(
+    briefs: list[Brief], intersections: list[Intersection]
+) -> tuple[list[Brief], list[Intersection]]:
+    from swarm.settings import get_settings
+
+    settings = get_settings()
+    accepted = [item for item in intersections if item.accepted]
+    return (
+        select_by_vertical(briefs, settings.smith_briefs_per_lens, lambda brief: brief.vertical),
+        select_intersections(accepted, settings.smith_intersections_per_lens),
+    )
+
+
+def coerce_questions(raw) -> tuple[list, str]:
+    """Return question objects and a failure reason when the payload cannot be read.
+
+    Run 20 stored `questions` as a string of JSON for two lenses. Iterating that
+    string dropped every question and the template filled the lens.
+    """
+    if isinstance(raw, list):
+        return raw, ""
+    if isinstance(raw, str):
+        text = raw.strip()
+        if not text:
+            return [], "empty"
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError:
+            return [], "unreadable"
+        if isinstance(parsed, list):
+            return parsed, ""
+        if isinstance(parsed, dict):
+            inner = parsed.get("questions")
+            if isinstance(inner, list):
+                return inner, ""
+            if isinstance(inner, str):
+                return coerce_questions(inner)
+        return [], "unreadable"
+    if raw is None:
+        return [], "empty"
+    return [], "unreadable"
+
+
 def format_smith_block(briefs: list[Brief], intersections: list[Intersection]) -> str:
     """Whole briefs, labelled. Smiths cite B1… and I1…; code maps those to ids."""
     bits = ["BRIEFS:"]
@@ -101,46 +206,97 @@ def run_smiths(
     llm: LLM,
     *,
     run_id: int = 0,
-) -> list[Question]:
-    accepted = [i for i in intersections if i.accepted]
+) -> tuple[list[Question], list[dict]]:
+    chosen_briefs, chosen_intersections = prepare_smith_inputs(briefs, intersections)
     questions: list[Question] = []
+    reports: list[dict] = []
     for lens in lenses():
-        produced = _llm(lens, briefs, accepted, taste, llm, run_id) or _fallback(
-            lens, briefs, accepted, run_id
+        if not llm.available:
+            produced = _fallback(lens, chosen_briefs, chosen_intersections, run_id)
+            reports.append({"lens": lens["id"], "model_count": 0, "reason": ""})
+            questions.extend(produced)
+            continue
+        produced, reason = _ask(
+            lens, chosen_briefs, chosen_intersections, taste, llm, run_id, fewer=False
+        )
+        if not produced:
+            produced, reason = _ask(
+                lens,
+                chosen_briefs,
+                chosen_intersections,
+                taste,
+                llm,
+                run_id,
+                fewer=reason == "truncated",
+            )
+        reports.append(
+            {
+                "lens": lens["id"],
+                "model_count": len(produced),
+                "reason": "" if produced else reason,
+            }
         )
         questions.extend(produced)
-    return questions
+    return questions, reports
 
 
-def _llm(
+def _ask(
     lens: dict,
     briefs: list[Brief],
     intersections: list[Intersection],
     taste: TasteProfile,
     llm: LLM,
     run_id: int,
-) -> list[Question] | None:
-    if not llm.available:
-        return None
+    *,
+    fewer: bool,
+) -> tuple[list[Question], str]:
     system = PROMPT.format(
         lens_name=lens["name"],
         lens_essence=lens["essence"].strip(),
         taste=profile_for_prompt(taste),
     )
     user = format_smith_block(briefs, intersections)
+    if fewer:
+        user += "\n\nThe previous reply was cut off. Return at most 4 questions."
     data = llm.complete_json(
         system=system,
         user=user,
         schema=SCHEMA,
         max_tokens=4000,
     )
+    produced, parsed, dropped, reason = _from_payload(lens, briefs, intersections, data, llm, run_id)
+    if hasattr(llm, "note_outcome"):
+        llm.note_outcome(parsed, dropped)
+    return produced, reason
+
+
+def _from_payload(
+    lens: dict,
+    briefs: list[Brief],
+    intersections: list[Intersection],
+    data: dict | None,
+    llm: LLM,
+    run_id: int,
+) -> tuple[list[Question], int, int, str]:
+    stop = str(getattr(llm, "last_stop_reason", "") or "")
     if not data:
-        return None
+        reason = "truncated" if stop == "max_tokens" else "unreadable"
+        return [], 0, 0, reason
+    raw_items, coerce_reason = coerce_questions(data.get("questions"))
+    if coerce_reason == "unreadable" or (coerce_reason and stop == "max_tokens"):
+        reason = "truncated" if stop == "max_tokens" else "unreadable"
+        return [], 0, 0, reason
     label_i = {f"I{i}": inter for i, inter in enumerate(intersections, start=1)}
     label_b = {f"B{i}": brief for i, brief in enumerate(briefs, start=1)}
     writer = llm.writer_name()
     out: list[Question] = []
-    for raw in data.get("questions") or []:
+    dropped = 0
+    parsed = 0
+    for raw in raw_items:
+        if not isinstance(raw, dict):
+            dropped += 1
+            continue
+        parsed += 1
         try:
             text = raw["text"]
             ref = str(raw.get("intersection_ref") or "").strip()
@@ -177,8 +333,17 @@ def _llm(
                 )
             )
         except Exception:
+            dropped += 1
             continue
-    return out or None
+    if out:
+        return out, parsed, dropped, ""
+    if stop == "max_tokens":
+        reason = "truncated"
+    elif parsed == 0:
+        reason = "empty"
+    else:
+        reason = "invalid"
+    return [], parsed, dropped, reason
 
 
 def _fallback(

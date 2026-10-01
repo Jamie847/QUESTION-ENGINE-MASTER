@@ -41,6 +41,7 @@ def init_db() -> None:
     Base.metadata.create_all(engine)
     _migrate_digest_uniqueness(engine)
     _migrate_wo006(engine)
+    _migrate_wo008(engine)
 
 
 def _migrate_digest_uniqueness(engine: Engine) -> None:
@@ -147,6 +148,20 @@ def _migrate_wo006(engine: Engine) -> None:
                 "WHERE provenance IS NULL OR provenance = ''"
             )
         )
+
+
+def _migrate_wo008(engine: Engine) -> None:
+    """Smith call log: why the model stopped, and how many questions survived parsing."""
+    specs = [
+        ("agent_calls", "stop_reason", "VARCHAR(64)"),
+        ("agent_calls", "parsed_count", "INTEGER"),
+        ("agent_calls", "dropped_count", "INTEGER"),
+    ]
+    with engine.begin() as conn:
+        for table, column, ddl in specs:
+            if column in _column_names(conn, engine, table):
+                continue
+            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}"))
 
 
 def _column_names(conn, engine: Engine, table: str) -> set[str]:

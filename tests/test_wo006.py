@@ -68,15 +68,14 @@ def test_f1_unknown_label_is_unlinked_and_scout_drops_invented_urls():
                 ]
             }
 
-    questions = run_smiths([brief], [inter], TasteProfile(), FakeLLM(), run_id=1)
+    questions, _reports = run_smiths([brief], [inter], TasteProfile(), FakeLLM(), run_id=1)
     model_written = [q for q in questions if q.written_by == "model:test-writer"]
-    templates = [q for q in questions if q.lens == "contrarian"]
     assert model_written, "expected model questions from the non-contrarian lenses"
     for question in model_written:
         assert question.intersection_id is None
         assert question.brief_ids == []
         assert question.provenance == "unlinked"
-    assert templates and all(q.written_by == "template" for q in templates)
+    assert not any(q.lens == "contrarian" for q in questions)
     assert any("who is affected: foundries and the firms buying wafers" in body for body in seen.values())
 
     kept = Signal(
@@ -195,7 +194,54 @@ def test_f3_keyed_curator_failure_writes_no_digest(monkeypatch):
         )
         return [signal], [SourceHealth(source="hacker_news", ok=True, count=1)]
 
-    def no_json(self, **kwargs):
+    def no_json(self, *, system, user, schema, **kwargs):
+        required = schema.get("required") or []
+        if "curated" in required:
+            return None
+        if "briefs" in required:
+            return {
+                "briefs": [
+                    {
+                        "headline": "NIST counted 12 comments on a named docket",
+                        "what_is_happening": "A docket moved on a named date.",
+                        "why_now": "The comment window closes Friday.",
+                        "who_is_affected": "foundries buying wafers",
+                        "velocity": "steady",
+                        "signal_refs": ["S1"],
+                        "source_urls": [],
+                    }
+                ]
+            }
+        if "intersections" in required:
+            return {
+                "intersections": [
+                    {
+                        "verticals": ["ai", "health"],
+                        "thesis": "A named docket meets a named clinic.",
+                        "surprise": 0.5,
+                        "plausibility": 0.5,
+                        "coverage": "thin",
+                        "coverage_notes": "",
+                        "accepted": True,
+                        "reject_reason": "",
+                        "brief_headlines": ["NIST counted 12 comments on a named docket"],
+                    }
+                ]
+            }
+        if "questions" in required:
+            return {
+                "questions": [
+                    {
+                        "text": "Who staffs the overflow if the named docket stalls for the foundries already buying wafers?",
+                        "verticals": ["ai"],
+                        "coverage": "thin",
+                        "decay_class": "slow",
+                        "context": "The docket.",
+                        "intersection_ref": "none",
+                        "brief_refs": [],
+                    }
+                ]
+            }
         return None
 
     monkeypatch.setattr("swarm.run_daily.collect_signals", one_signal)

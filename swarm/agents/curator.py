@@ -80,12 +80,15 @@ def run_curator(
     already = [q for q in questions if q.status == QuestionStatus.duplicate]
     candidates = [q for q in questions if q.status != QuestionStatus.duplicate]
     if llm.available:
-        decided = _llm(candidates, taste, llm)
-        if decided is None:
-            raise CuratorFallback(
-                "curator call failed; refusing to archive a heuristic gate. "
-                f"Last error: {getattr(llm, 'last_error', '')}"
-            )
+        if not candidates:
+            decided = []
+        else:
+            decided = _llm(candidates, taste, llm)
+            if decided is None:
+                raise CuratorFallback(
+                    "curator call failed; refusing to archive a heuristic gate. "
+                    f"Last error: {getattr(llm, 'last_error', '')}"
+                )
     else:
         decided = _fallback(candidates, taste)
     by_id = {q.id: q for q in decided}
