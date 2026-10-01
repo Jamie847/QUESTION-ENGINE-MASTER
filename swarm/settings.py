@@ -56,6 +56,8 @@ class Settings(BaseSettings):
     allow_demo_signals: bool = False
     snippet_chars: int = 800
     scout_signals_per_vertical: int = 30
+    smith_briefs_per_lens: int = 30
+    smith_intersections_per_lens: int = 12
     brave_min_interval_s: float = 1.1
     openalex_api_key: str = ""
     regulations_gov_api_key: str = ""
