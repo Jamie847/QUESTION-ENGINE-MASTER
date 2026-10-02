@@ -66,6 +66,8 @@ The dashboard is open (`DASHBOARD_AUTH=off`). That is the intended posture (WO-0
 | Web | `question-engine-dashboard` | FastAPI UI, binds `0.0.0.0:$PORT`, health at `/healthz` |
 | Cron | `question-engine-swarm` | Manual Trigger Run only. Schedule is `0 0 29 2 *` (leap-day) because Render requires a schedule. |
 
+Web `preDeploy` runs `--refuse-if-locked` first. If a swarm run holds the lock, the deploy fails and the old instance keeps serving. Never cut over mid-run.
+
 ### Hand this to Claude Cowork (or apply it yourself)
 
 1. Put this repo on GitHub (Render cannot clone a Cursor-only remote).
@@ -75,7 +77,9 @@ The dashboard is open (`DASHBOARD_AUTH=off`). That is the intended posture (WO-0
    - `BRAVE_API_KEY` (required for Health and Business scouts)
    - `EIA_API_KEY` / `FRED_API_KEY` (optional; Commodities movers stay dark without them)
    - `REDDIT_CLIENT_ID` / `REDDIT_CLIENT_SECRET` (application-only OAuth; without them Reddit errors instead of returning a silent zero)
-   - `VOYAGE_API_KEY` (optional; without it the digest still archives and the footer reads *memory not updated*)
+   - `VOYAGE_API_KEY` (optional; without it the digest still archives, the footer reads *memory not updated*, and Archive **Search memory** says the catalog is empty because the key is missing)
+   - `DESK_MODEL` (defaults to `claude-opus-5-5`)
+   - `RELIEFWEB_APPNAME` (optional; ReliefWeb stays dark without a pre-approved appname)
    - Leave `PERPLEXITY_API_KEY` blank. CP ruled no Perplexity.
 4. Open `https://question-engine-dashboard.onrender.com/controls` and click **Run swarm now**.
 5. Prove infra before trusting a digest: `GET /healthz` on the web service, and `python -m swarm.run_daily --healthcheck` on the cron (look for `CRON_HEALTHCHECK_PASS`).

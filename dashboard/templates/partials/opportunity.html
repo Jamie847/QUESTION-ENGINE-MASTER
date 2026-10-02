@@ -41,8 +41,11 @@
     <div><dt>Why now</dt><dd>{{ opp.why_now }}</dd></div>
     <div><dt>How it charges</dt><dd>{{ opp.how_it_charges }}</dd></div>
     <div><dt>Rivals found</dt><dd>{{ opp.rivals }}</dd></div>
+    <div><dt>Commentators</dt>
+      <dd>{% if opp.commentators %}{{ opp.commentators }}{% else %}none found{% endif %}</dd>
+    </div>
     <div><dt>First prospects</dt>
-      <dd>{% if opp.first_prospects %}{{ opp.first_prospects | join(", ") }}{% else %}none named in the snippets{% endif %}</dd>
+      <dd>{% if opp.first_prospects %}{% for p in opp.first_prospects %}{% if p is mapping %}{% if p.url %}<a href="{{ p.url }}">{{ p.name }}</a>{% else %}{{ p.name }}{% endif %}{% else %}{{ p }}{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}{% else %}none named in the snippets{% endif %}</dd>
     </div>
     <div><dt>Fit</dt><dd>{{ opp.fit }}</dd></div>
     <div><dt>Weekend test</dt><dd>{{ opp.weekend_test }}</dd></div>

@@ -17,6 +17,67 @@ from swarm.sources.snippets import clip_snippet
 
 API = "https://www.federalregister.gov/api/v1/documents.json"
 RULE_TYPES = ("RULE", "PRORULE")
+# Recorded 200 against /api/v1/agencies and documents.json on 2026-10-02.
+# Invented slugs (bureau-of-industry-and-security, office-of-foreign-assets-control)
+# return HTTP 400 {"errors":{"agencies":"invalid value"}}.
+AGENCY_ALIASES = {
+    "bureau-of-industry-and-security": "industry-and-security-bureau",
+    "office-of-foreign-assets-control": "foreign-assets-control-office",
+}
+RECORDED_VALID_AGENCIES = frozenset(
+    {
+        "agriculture-department",
+        "centers-for-medicare-medicaid-services",
+        "commerce-department",
+        "education-department",
+        "energy-department",
+        "environmental-protection-agency",
+        "federal-communications-commission",
+        "food-and-drug-administration",
+        "foreign-assets-control-office",
+        "health-and-human-services-department",
+        "industry-and-security-bureau",
+        "interior-department",
+        "national-institute-of-standards-and-technology",
+        "state-department",
+        "treasury-department",
+    }
+)
+
+
+def official_agency_slug(slug: str) -> str | None:
+    raw = (slug or "").strip()
+    mapped = AGENCY_ALIASES.get(raw, raw)
+    return mapped if mapped in RECORDED_VALID_AGENCIES else None
+
+
+def build_fr_params(
+    query: str,
+    agencies: list[str],
+    window_days: int,
+    *,
+    prefer_significant: bool,
+) -> list[tuple[str, str]]:
+    params: list[tuple[str, str]] = [
+        ("per_page", "8"),
+        ("order", "newest"),
+        ("conditions[term]", query),
+        (
+            "conditions[publication_date][gte]",
+            (date.today() - timedelta(days=max(1, window_days))).isoformat(),
+        ),
+        ("conditions[type][]", "RULE"),
+        ("conditions[type][]", "PRORULE"),
+    ]
+    if prefer_significant:
+        params.append(("conditions[significant]", "1"))
+    for slug in agencies:
+        official = official_agency_slug(slug)
+        if official:
+            params.append(("conditions[agencies][]", official))
+    return params
+
+
 HOUSEKEEPING_RE = re.compile(
     r"airworthiness directives?|"
     r"advisory committee.{0,80}renewal|"
@@ -123,21 +184,9 @@ async def _search(
     *,
     prefer_significant: bool,
 ) -> list[dict[str, Any]]:
-    params: list[tuple[str, str]] = [
-        ("per_page", "8"),
-        ("order", "newest"),
-        ("conditions[term]", query),
-        (
-            "conditions[publication_date][gte]",
-            (date.today() - timedelta(days=max(1, window_days))).isoformat(),
-        ),
-        ("conditions[type][]", "RULE"),
-        ("conditions[type][]", "PRORULE"),
-    ]
-    if prefer_significant:
-        params.append(("conditions[significant]", "1"))
-    for slug in agencies:
-        params.append(("conditions[agencies][]", slug))
+    params = build_fr_params(
+        query, agencies, window_days, prefer_significant=prefer_significant
+    )
     resp = await client.get(API, params=params)
     resp.raise_for_status()
     return extract_documents(resp.json())

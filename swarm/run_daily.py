@@ -21,7 +21,13 @@ from swarm.dedup import mark_duplicates
 from swarm.display_time import digest_local_date
 from swarm.freshness import freshness_window_days
 from swarm.llm import LLM
-from swarm.lock import LockBusy, acquire_lock, fail_unlocked_running_runs, release_lock
+from swarm.lock import (
+    LockBusy,
+    acquire_lock,
+    fail_unlocked_running_runs,
+    held_run_id,
+    release_lock,
+)
 from swarm.models import (
     Brief,
     Intersection,
@@ -83,6 +89,14 @@ def main(argv: list[str] | None = None) -> int:
         help="Rewrite an existing digest's markdown from stored artifacts (default: latest).",
     )
     parser.add_argument(
+        "--refuse-if-locked",
+        action="store_true",
+        help=(
+            "Exit 1 if a run holds the daily lock so a web preDeploy fails "
+            "and the old instance keeps serving. Does not start a run."
+        ),
+    )
+    parser.add_argument(
         "--repair-links",
         action="store_true",
         help="Re-resolve brief URLs from stored scout calls (WO-011). Does not start a run.",
@@ -106,6 +120,19 @@ def main(argv: list[str] | None = None) -> int:
 
     init_db()
     settings = get_settings()
+    if args.refuse_if_locked:
+        hold = held_run_id()
+        if hold is not None:
+            print(f"REFUSE_DEPLOY lock held by run {hold}")
+            return 1
+        print("REFUSE_DEPLOY ok — no live lock")
+        if not (
+            args.repair_links
+            or args.close_orphans
+            or args.backfill_memory
+            or args.rebuild_memory
+        ):
+            return 0
     if args.repair_links:
         from swarm.repair_links import repair_past_links
 
@@ -139,8 +166,8 @@ def main(argv: list[str] | None = None) -> int:
             f"skipped={counts.get('skipped', 0)} "
             f"ok={counts.get('ok', 0)}"
         )
-        # Live web preDeploy is still --repair-links --close-orphans until
-        # the Blueprint syncs. Missing Voyage must not fail a deploy.
+        # preDeploy: --refuse-if-locked already returned 1 if a run holds
+        # the lock. Missing Voyage must not fail a deploy after that.
         return 0
     if args.healthcheck:
         from swarm.db import ping_db

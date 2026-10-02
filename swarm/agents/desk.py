@@ -11,14 +11,22 @@ from typing import Any, Callable
 from swarm.config import business_shapes
 from swarm.db import session_scope
 from swarm.desk.assets import load_assets
+from swarm.desk.classify import (
+    classify_orgs,
+    format_rivals,
+    format_writers,
+    none_found,
+    prospect_queries,
+    prospects_with_links,
+    rival_queries,
+)
+from swarm.desk.pages import check_note_from, read_pages
 from swarm.desk.select import select_for_desk
 from swarm.memory.recall import format_for_prompt, recall_for_desk
 from swarm.desk.validate import (
     apply_number_rule,
     evidence_blob,
-    filter_prospects,
     fit_from_assets,
-    rivals_phrase,
 )
 from swarm.llm import LLM
 from swarm.orm import OpportunityRow, QuestionRow, RunRow
@@ -145,6 +153,7 @@ def name_claims(*, question: Any, briefs: list[Any], llm: LLM) -> list[dict[str,
         reserve=True,
         estimate_in=2500,
         estimate_out=800,
+        model=get_settings().desk_model,
     )
     if not data:
         return []
@@ -178,6 +187,80 @@ def collect_searches(claims: list[dict[str, Any]], search_fn: SearchFn) -> list[
             if not found:
                 hits.append({"query": query, "title": "", "url": "", "snippet": ""})
     return hits
+
+
+def _search_queries(search_fn: SearchFn, queries: list[str]) -> list[dict[str, Any]]:
+    hits: list[dict[str, Any]] = []
+    for query in queries:
+        try:
+            found = search_fn(query) or []
+        except Exception as exc:  # noqa: BLE001 — desk continues on a dark search
+            log.warning("desk search failed q=%s %s", query, exc)
+            found = []
+        for item in found[:5]:
+            hits.append(
+                {
+                    "query": query,
+                    "title": str(item.get("title") or ""),
+                    "url": str(item.get("url") or ""),
+                    "snippet": str(item.get("snippet") or ""),
+                    "name": str(item.get("name") or item.get("title") or ""),
+                }
+            )
+        if not found:
+            hits.append(
+                {"query": query, "title": "", "url": "", "snippet": "", "name": ""}
+            )
+    return hits
+
+
+def _prospect_rows(
+    raw: list[Any], searches: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for item in raw:
+        if isinstance(item, dict):
+            name = str(item.get("name") or item.get("title") or "").strip()
+            url = str(item.get("url") or "").strip()
+            if name:
+                rows.append({"name": name, "url": url})
+            continue
+        name = str(item).strip()
+        if not name:
+            continue
+        url = ""
+        needle = name.lower()
+        for hit in searches:
+            hay = (
+                f"{hit.get('title') or ''} {hit.get('snippet') or ''} "
+                f"{hit.get('url') or ''}"
+            ).lower()
+            if needle in hay and hit.get("url"):
+                url = str(hit.get("url"))
+                break
+        rows.append({"name": name, "url": url})
+    return rows
+
+
+def _pages_for_claims(claims: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    pages: list[dict[str, Any]] = []
+    for row in claims:
+        if not isinstance(row, dict):
+            continue
+        urls = [str(u) for u in (row.get("links") or []) if str(u).strip()]
+        if urls:
+            pages.extend(read_pages(urls, per_claim=2))
+    return pages
+
+
+def _picked_kind(card: dict[str, Any]) -> str:
+    for raw in card.get("shapes") or []:
+        if isinstance(raw, dict) and raw.get("picked") and raw.get("kind"):
+            return str(raw.get("kind"))
+    for raw in card.get("shapes") or []:
+        if isinstance(raw, dict) and raw.get("kind"):
+            return str(raw.get("kind"))
+    return "software"
 
 
 def _card_user(
@@ -246,6 +329,7 @@ def write_card(
         reserve=True,
         estimate_in=3500,
         estimate_out=1500,
+        model=get_settings().desk_model,
     )
 
 
@@ -258,12 +342,42 @@ def run_one_opportunity(
     searches: list[dict[str, Any]],
     assets: dict[str, str],
     n_searches: int,
+    pages: list[dict[str, Any]] | None = None,
+    rival_rows: list[dict[str, str]] | None = None,
+    writer_rows: list[dict[str, str]] | None = None,
+    prospect_rows: list[dict[str, Any]] | None = None,
+    queries_run: list[Any] | None = None,
 ) -> dict[str, Any]:
     related = _brief_bundle(question, briefs)
-    evidence = evidence_blob(related, searches)
+    evidence = evidence_blob(related, searches, pages)
     verdicts = [r for r in (card.get("claims") or claims) if isinstance(r, dict)]
     if not verdicts:
         verdicts = list(claims)
+    if rival_rows is None or writer_rows is None:
+        classified_r, classified_w = classify_orgs(
+            [
+                {"name": str(x), "title": str(x), "url": "", "snippet": ""}
+                for x in (card.get("rivals") or [])
+            ]
+        )
+        if rival_rows is None:
+            rival_rows = classified_r
+        if writer_rows is None:
+            writer_rows = classified_w
+    if prospect_rows is None:
+        prospect_rows = _prospect_rows(list(card.get("first_prospects") or []), searches)
+    commentators = format_writers(writer_rows)
+    rivals_line = format_rivals(rival_rows, n_searches)
+    note = CHECK_NOTE if pages is None else check_note_from(pages)
+    pages_read = [
+        {"url": str(p.get("url") or ""), "mode": str(p.get("mode") or "snippet")}
+        for p in (pages or [])
+    ]
+    queries = list(queries_run or [])
+    if not queries:
+        queries = sorted(
+            {str(h.get("query") or "") for h in searches if h.get("query")}
+        )
     all_unverified = bool(verdicts) and all(
         str(r.get("verdict") or "") == "unverified" for r in verdicts
     )
@@ -281,11 +395,14 @@ def run_one_opportunity(
             "how_it_charges": "",
             "rivals": "",
             "first_prospects": [],
+            "commentators": commentators,
+            "pages_read": pages_read,
+            "queries_run": queries,
             "fit": fit_from_assets(assets) or "assets profile not written",
             "weekend_test": "",
             "why_it_might_fail": "",
             "red_flags": [],
-            "check_note": CHECK_NOTE,
+            "check_note": note,
             "searches": searches,
         }
 
@@ -319,17 +436,13 @@ def run_one_opportunity(
         "weekend_test": str(card.get("weekend_test") or ""),
         "why_it_might_fail": str(card.get("why_it_might_fail") or ""),
         "fit": str(card.get("fit") or ""),
-        "rivals": rivals_phrase(
-            [str(x) for x in (card.get("rivals") or [])], n_searches
-        ),
+        "rivals": rivals_line,
     }
     cleaned, dirty = apply_number_rule(draft, evidence)
     if dirty:
         cleaned, _again = apply_number_rule(cleaned, evidence, second_pass=True)
     fit = fit_from_assets(assets) or cleaned.get("fit") or "assets profile not written"
-    prospects = filter_prospects(
-        [str(x) for x in (card.get("first_prospects") or [])], evidence
-    )
+    prospects = prospects_with_links(prospect_rows, evidence)
     return {
         "status": "completed",
         "claims": verdicts,
@@ -341,13 +454,16 @@ def run_one_opportunity(
         "what_they_use_today": cleaned.get("what_they_use_today") or "unknown",
         "why_now": cleaned.get("why_now") or "",
         "how_it_charges": cleaned.get("how_it_charges") or "",
-        "rivals": cleaned.get("rivals") or rivals_phrase([], n_searches),
+        "rivals": cleaned.get("rivals") or format_rivals([], n_searches),
         "first_prospects": prospects,
+        "commentators": commentators,
+        "pages_read": pages_read,
+        "queries_run": queries,
         "fit": fit,
         "weekend_test": cleaned.get("weekend_test") or "",
         "why_it_might_fail": cleaned.get("why_it_might_fail") or "",
         "red_flags": [str(x) for x in (card.get("red_flags") or []) if str(x).strip()],
-        "check_note": CHECK_NOTE,
+        "check_note": note,
         "searches": searches,
     }
 
@@ -378,7 +494,10 @@ def _persist(run_id: int, question_id: str, payload: dict[str, Any], *, on_deman
         row.why_now = payload.get("why_now") or ""
         row.how_it_charges = payload.get("how_it_charges") or ""
         row.rivals = payload.get("rivals") or ""
+        row.commentators = payload.get("commentators") or ""
         row.first_prospects = payload.get("first_prospects") or []
+        row.pages_read = payload.get("pages_read") or []
+        row.queries_run = payload.get("queries_run") or []
         row.fit = payload.get("fit") or ""
         row.weekend_test = payload.get("weekend_test") or ""
         row.why_it_might_fail = payload.get("why_it_might_fail") or ""
@@ -445,7 +564,6 @@ def run_desk(
             llm.agent = started_agent
             continue
         searches = collect_searches(named, searcher)
-        n_searches = len({h.get("query") for h in searches if h.get("query")})
         memory = recall_for_desk(
             f"{getattr(row, 'title', '')} {getattr(row, 'text', '')}".strip(),
             run_id=run_id,
@@ -463,6 +581,35 @@ def run_desk(
         if draft is None:
             warnings.append(f"Opportunity desk wrote no card for {row.id}.")
             continue
+        extra_rival = _search_queries(
+            searcher,
+            rival_queries(
+                str(draft.get("who_has_problem") or ""),
+                str(draft.get("who_pays") or ""),
+                _picked_kind(draft),
+            ),
+        )
+        extra_prospect = _search_queries(
+            searcher,
+            prospect_queries(
+                str(draft.get("who_pays") or draft.get("who_has_problem") or "")
+            ),
+        )
+        searches = list(searches) + extra_rival + extra_prospect
+        org_hits = [h for h in extra_rival if h.get("title") or h.get("name")]
+        for raw in draft.get("rivals") or []:
+            org_hits.append(
+                {"name": str(raw), "title": str(raw), "url": "", "snippet": ""}
+            )
+        rival_rows, writer_rows = classify_orgs(org_hits)
+        prospect_rows = list(extra_prospect)
+        prospect_rows.extend(
+            _prospect_rows(list(draft.get("first_prospects") or []), searches)
+        )
+        pages = _pages_for_claims(list(draft.get("claims") or named))
+        queries_run = sorted(
+            {str(h.get("query") or "") for h in searches if h.get("query")}
+        )
         built = run_one_opportunity(
             question=row,
             briefs=related,
@@ -470,7 +617,12 @@ def run_desk(
             card=draft,
             searches=searches,
             assets=profile,
-            n_searches=n_searches or 2,
+            n_searches=len(queries_run),
+            pages=pages,
+            rival_rows=rival_rows,
+            writer_rows=writer_rows,
+            prospect_rows=prospect_rows,
+            queries_run=queries_run,
         )
         cost = max(0.0, llm.budget.spent_usd - before)
         built["cost_usd"] = cost
@@ -482,7 +634,7 @@ def run_desk(
             built,
             on_demand=on_demand,
             cost=cost,
-            written_by=llm.writer_name(judgment=True),
+            written_by=llm.writer_name(judgment=True, model=settings.desk_model),
         )
         desk_cost += cost
         cards.append(built)

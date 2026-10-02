@@ -385,3 +385,19 @@ def test_search_cap_holds():
     assert r1.status_code == 200
     assert r2.status_code == 200
     assert "Search memory cap" in r3.text or "daily cap" in r3.text.lower()
+
+
+def test_search_memory_names_missing_voyage_key(monkeypatch):
+    """Empty catalog is a missing key, not a failed search."""
+    init_db()
+    monkeypatch.delenv("VOYAGE_API_KEY", raising=False)
+    get_settings.cache_clear()
+    client = TestClient(app)
+    page = client.get("/archive")
+    assert page.status_code == 200
+    assert "VOYAGE_API_KEY" in page.text
+    assert "missing" in page.text.lower()
+    page2 = client.get("/archive", params={"mq": "GLP-1"})
+    assert page2.status_code == 200
+    assert "VOYAGE_API_KEY" in page2.text
+    assert "Nothing in memory matches" not in page2.text

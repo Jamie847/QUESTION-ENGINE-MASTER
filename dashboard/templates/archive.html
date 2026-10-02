@@ -39,10 +39,13 @@
     <button type="submit">Search memory</button>
   </form>
   <p class="muted">{{ memory_remaining }} searches left today.</p>
+  {% if voyage_missing %}
+  <p class="warns">Search memory is empty because VOYAGE_API_KEY is missing. The catalog cannot fill until that key is set.</p>
+  {% endif %}
   {% if memory_error %}
   <p class="warns">{{ memory_error }}</p>
   {% endif %}
-  {% if mq and not memory_error %}
+  {% if mq and not memory_error and not voyage_missing %}
     {% if memory_results %}
     <ul class="memory-hits">
       {% for hit in memory_results %}
