@@ -7,16 +7,15 @@ from typing import Any
 
 from swarm.agents.scout import SCOUT_SLOTS, take_round_robin
 from swarm.config import lenses, verticals
-from swarm.models import QuestionStatus, Signal
+from swarm.models import Signal
 from swarm.primary import (
     domain_of,
     is_primary,
-    looks_like_record,
-    prefer_primary_urls,
 )
 
 UNRECORDED = "sources not recorded"
-_HIDDEN = {"unlinked", "pre-wo006"}
+_HIDDEN = {"unlinked", "pre-wo006", "unverified"}
+_BANNED = ("quietly", "silently")
 
 
 def from_cites(
@@ -40,29 +39,9 @@ def from_cites(
     claimed: list[str] = []
     for brief in related:
         claimed.extend(u for u in (getattr(brief, "sources", None) or []) if u)
-    blob = " ".join(
-        getattr(brief, field, "") or ""
-        for brief in related
-        for field in ("headline", "what_is_happening", "why_now")
-    )
-    pool = [s for s in signals_by_url.values() if s is not None]
-    modeled = [
-        sig
-        if isinstance(sig, Signal)
-        else Signal(
-            source=getattr(sig, "source", "") or "unknown",
-            title=getattr(sig, "title", "") or "untitled",
-            url=getattr(sig, "url", "") or "",
-            snippet=getattr(sig, "snippet", "") or "",
-            score=float(getattr(sig, "score", 0) or 0),
-        )
-        for sig in pool
-        if getattr(sig, "url", "")
-    ]
-    if looks_like_record(blob):
-        urls = prefer_primary_urls(blob, claimed, modeled)
-    else:
-        urls = claimed
+    urls = claimed
+    if not urls:
+        return empty
     cites: list[dict[str, Any]] = []
     seen: set[str] = set()
     for url in urls:
@@ -241,21 +220,60 @@ def failure_lines_from_warnings(warnings: list[Any] | None) -> list[str]:
     return out
 
 
-def sources_linked_line(questions: list[Any]) -> tuple[str, str]:
-    rows = []
-    for q in questions:
-        status = getattr(q, "status", "")
-        value = status.value if isinstance(status, QuestionStatus) else str(status or "")
-        if value == "curated":
-            rows.append(q)
-    if not rows:
-        rows = list(questions)
+def checked_urls(question: Any, briefs_by_id: dict[str, Any] | None) -> list[str]:
+    """URLs that survived the scout-input check and still sit on the brief."""
+    if not briefs_by_id:
+        return []
+    out: list[str] = []
+    for bid in getattr(question, "brief_ids", None) or []:
+        brief = briefs_by_id.get(bid)
+        if brief is None:
+            continue
+        for url in getattr(brief, "sources", None) or []:
+            if url and url not in out:
+                out.append(url)
+    return out
+
+
+def question_is_linked(question: Any, briefs_by_id: dict[str, Any] | None) -> bool:
+    prov = (getattr(question, "provenance", "") or "").strip()
+    if prov in _HIDDEN:
+        return False
+    return bool(checked_urls(question, briefs_by_id))
+
+
+def sources_linked_line(
+    questions: list[Any], briefs_by_id: dict[str, Any] | None = None
+) -> tuple[str, str]:
+    rows = list(questions)
     total = len(rows)
-    linked = sum(
-        1 for q in rows if (getattr(q, "provenance", "") or "").strip() == "linked"
-    )
+    if briefs_by_id is None:
+        linked = sum(
+            1
+            for q in rows
+            if (getattr(q, "provenance", "") or "").strip() == "linked"
+        )
+    else:
+        linked = sum(1 for q in rows if question_is_linked(q, briefs_by_id))
     line = f"Sources linked: {linked} of {total}"
     warn = ""
     if total and (linked / total) < 0.8:
         warn = f"Sources linked below 80% ({linked} of {total})."
     return line, warn
+
+
+def banned_words_line(questions: list[Any], intersections: list[Any] | None = None) -> str:
+    hits = 0
+    for q in questions:
+        blob = " ".join(
+            [
+                str(getattr(q, "text", "") or ""),
+                str(getattr(q, "title", "") or ""),
+                str(getattr(q, "context", "") or ""),
+            ]
+        ).lower()
+        hits += sum(blob.count(word) for word in _BANNED)
+    for item in intersections or []:
+        blob = str(getattr(item, "thesis", "") or "").lower()
+        hits += sum(blob.count(word) for word in _BANNED)
+    return f"Banned words: {hits}"

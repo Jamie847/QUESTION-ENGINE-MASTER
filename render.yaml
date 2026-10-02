@@ -31,6 +31,10 @@ envVarGroups:
         sync: false
       - key: SAM_GOV_API_KEY
         sync: false
+      - key: EIA_API_KEY
+        sync: false
+      - key: FRED_API_KEY
+        sync: false
       - key: DISPLAY_TZ
         value: "UTC"
       - key: SNIPPET_CHARS
@@ -75,6 +79,9 @@ services:
     plan: starter
     region: oregon
     buildCommand: pip install -r requirements.txt
+    # One-shot WO-011 link repair. A marker in deploy_markers means later
+    # deploys print skipped=1 and do not rewrite stored briefs.
+    preDeployCommand: python -m swarm.run_daily --repair-links
     startCommand: uvicorn dashboard.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /healthz
     envVars:

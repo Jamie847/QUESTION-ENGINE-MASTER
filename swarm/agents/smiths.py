@@ -323,14 +323,14 @@ def _from_payload(
                 coverage = Coverage(raw.get("coverage") or "unknown")
             elif inter is None:
                 intersection_id = None
-                provenance = "linked"
+                provenance = _brief_provenance(brief_ids, briefs)
                 verticals = raw.get("verticals") or []
                 coverage = Coverage(raw.get("coverage") or "unknown")
             else:
                 intersection_id = inter.id
                 if not brief_ids:
                     brief_ids = list(inter.brief_ids or [])
-                provenance = "linked"
+                provenance = _brief_provenance(brief_ids, briefs)
                 verticals = raw.get("verticals") or inter.verticals
                 coverage = Coverage(raw.get("coverage") or inter.coverage.value)
             out.append(
@@ -425,6 +425,15 @@ def _fallback(
             )
         )
     return out
+
+
+def _brief_provenance(brief_ids: list[str], briefs: list[Brief]) -> str:
+    by_id = {b.id: b for b in briefs}
+    for bid in brief_ids:
+        brief = by_id.get(bid)
+        if brief is not None and any(brief.sources or []):
+            return "linked"
+    return "unlinked"
 
 
 def _other_topic(inter: Intersection, briefs: list[Brief]) -> str:

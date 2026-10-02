@@ -64,7 +64,11 @@ def render_digest(
     )
     killed = [q for q in questions if q.status == QuestionStatus.killed]
     duplicates = [q for q in questions if q.status == QuestionStatus.duplicate]
-    near_miss = sample_near_miss_pairs(questions, prior_questions or [])
+    near_miss = sample_near_miss_pairs(
+        questions,
+        prior_questions or [],
+        briefs_by_id={b.id: b for b in briefs} if briefs else None,
+    )
     accepted = [i for i in intersections if i.accepted]
     rejected = [i for i in intersections if not i.accepted]
     top = curated[:5]

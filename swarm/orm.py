@@ -222,6 +222,18 @@ class KillReasonRow(Base):
     )
 
 
+class DeployMarkerRow(Base):
+    """One-shot deploy steps. A row means that step already ran."""
+
+    __tablename__ = "deploy_markers"
+
+    name: Mapped[str] = mapped_column(String(64), primary_key=True)
+    detail: Mapped[dict[str, Any]] = mapped_column(JSONType, default=dict)
+    ran_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
 class RunLockRow(Base):
     __tablename__ = "run_locks"
 

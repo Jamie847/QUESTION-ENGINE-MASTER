@@ -80,10 +80,27 @@ def main(argv: list[str] | None = None) -> int:
         const="latest",
         help="Rewrite an existing digest's markdown from stored artifacts (default: latest).",
     )
+    parser.add_argument(
+        "--repair-links",
+        action="store_true",
+        help="Re-resolve brief URLs from stored scout calls (WO-011). Does not start a run.",
+    )
     args = parser.parse_args(argv)
 
     init_db()
     settings = get_settings()
+    if args.repair_links:
+        from swarm.repair_links import repair_past_links
+
+        counts = repair_past_links()
+        print(
+            "REPAIR_LINKS "
+            f"relinked={counts['relinked']} "
+            f"unverified={counts['unverified']} "
+            f"unlinked={counts['unlinked']} "
+            f"skipped={counts.get('skipped', 0)}"
+        )
+        return 0
     if args.healthcheck:
         from swarm.db import ping_db
 
@@ -215,6 +232,9 @@ def _execute(run_id: int) -> None:
                 warnings.append(f"No topic pairings this run. {pairing}")
             else:
                 warnings.append(pairing)
+        for line in getattr(run_cross_pollinator, "passed_over", []) or []:
+            if line not in warnings:
+                warnings.append(line)
         _persist_intersections(run_id, intersections)
         _checkpoint(run_id, StageName.cross_pollinate, warnings=warnings)
     else:

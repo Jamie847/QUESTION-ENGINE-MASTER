@@ -70,6 +70,8 @@ class Settings(BaseSettings):
     openalex_api_key: str = ""
     regulations_gov_api_key: str = ""
     sam_gov_api_key: str = ""
+    eia_api_key: str = ""
+    fred_api_key: str = ""
 
     @computed_field  # type: ignore[prop-decorator]
     @property

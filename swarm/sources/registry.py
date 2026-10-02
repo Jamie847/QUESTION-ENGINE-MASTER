@@ -10,13 +10,18 @@ import yaml
 from swarm.sources.arxiv import ArxivSource
 from swarm.sources.base import SourceAdapter
 from swarm.sources.brave import BraveSource
+from swarm.sources.cftc import CftcSource
+from swarm.sources.eia import EiaSource
 from swarm.sources.federal_register import FederalRegisterSource
+from swarm.sources.fred import FredSource
+from swarm.sources.gdelt import GdeltSource
 from swarm.sources.hn import HackerNewsSource
 from swarm.sources.huggingface import HuggingFacePapersSource
 from swarm.sources.journals import JournalRssSource
 from swarm.sources.openalex import OpenAlexSource
 from swarm.sources.reddit import RedditSource
 from swarm.sources.regulations import RegulationsGovSource
+from swarm.sources.reliefweb import ReliefWebSource
 from swarm.sources.sam_gov import SamGovSource
 from swarm.sources.wikipedia import WikipediaSource
 
@@ -34,6 +39,11 @@ _CLASSES: dict[str, type[SourceAdapter]] = {
     "openalex": OpenAlexSource,
     "regulations_gov": RegulationsGovSource,
     "sam_gov": SamGovSource,
+    "gdelt": GdeltSource,
+    "reliefweb": ReliefWebSource,
+    "eia": EiaSource,
+    "fred": FredSource,
+    "cftc": CftcSource,
 }
 
 # Sources that cannot fetch without a key. Reddit can still use the public JSON
@@ -43,6 +53,8 @@ _KEY_ATTR = {
     "openalex": "openalex_api_key",
     "regulations_gov": "regulations_gov_api_key",
     "sam_gov": "sam_gov_api_key",
+    "eia": "eia_api_key",
+    "fred": "fred_api_key",
 }
 
 

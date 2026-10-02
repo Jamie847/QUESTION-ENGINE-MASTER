@@ -104,24 +104,27 @@ def test_every_label_matches_the_signal_behind_its_url():
 
 def test_primary_record_is_cited_first_for_a_rule():
     question, brief, signals = _rank3_shape()
-    fr, news, *_ = signals
     ordered = prefer_primary_urls(
         "Department of Education final earnings-accountability rule",
         [NEWS_URL],
         signals,
     )
-    assert ordered[0] == FR_URL
-    assert NEWS_URL in ordered
+    assert ordered == [NEWS_URL]
 
-    # Display path: a rule-shaped brief with only commentary URLs still
-    # surfaces the FR signal that is among the run's signals.
+    cited = prefer_primary_urls(
+        "Department of Education final earnings-accountability rule",
+        [NEWS_URL, FR_URL],
+        signals,
+    )
+    assert cited[0] == FR_URL
+    assert NEWS_URL in cited
+
     cites = from_cites(
         question,
         {brief.id: brief},
         {s.url: s for s in signals},
     )
-    assert cites["cites"][0]["url"] == FR_URL
-    assert cites["cites"][0]["primary"] is True
+    assert [c["url"] for c in cites["cites"]] == [NEWS_URL, TOWN_URL, IBT_URL]
 
 
 def test_card_from_uses_signal_not_wikipedia_label():
@@ -182,9 +185,8 @@ def test_card_from_uses_signal_not_wikipedia_label():
     page = TestClient(app).get("/")
     assert page.status_code == 200
     assert "thesource.com" in page.text
-    assert "Financial Value Transparency and Gainful Employment" in page.text
-    assert "federalregister.gov" in page.text
-    assert "primary" in page.text
+    assert "Financial Value Transparency and Gainful Employment" not in page.text
+    assert "federalregister.gov" not in page.text.split("From:")[1][:400]
     # The wikipedia scout-mix name is not the From: label.
     assert "(wikipedia)" not in page.text.split("From:")[1][:200]
 
@@ -227,4 +229,4 @@ def test_scout_llm_brief_cites_federal_register_for_a_rule():
     cfg = {"id": "ai", "name": "AI"}
     out = _llm_briefs(cfg, [(s, i + 1) for i, s in enumerate(signals)], llm, 20)
     assert out
-    assert out[0].sources[0] == FR_URL
+    assert out[0].sources == [NEWS_URL]
