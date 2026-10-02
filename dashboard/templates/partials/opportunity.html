@@ -53,6 +53,23 @@
   </dl>
   {% endif %}
 
+  <div class="memory-related">
+    <h4>Related from memory</h4>
+    {% if opp.related_from_memory %}
+    <ul class="memory-hits">
+      {% for m in opp.related_from_memory %}
+      <li>
+        <span class="verts">{{ m.item_date }} · {{ m.kind }}</span>
+        <a href="{{ m.href }}">{{ m.title or m.text[:80] }}</a>
+        {% if m.verdict %} · {{ m.verdict }}{% if m.verdict_why %} — {{ m.verdict_why }}{% endif %}{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="muted">nothing related yet</p>
+    {% endif %}
+  </div>
+
   <div class="opp-verdict">
     <p class="meta-row">
       {% if opp.latest_verdict %}

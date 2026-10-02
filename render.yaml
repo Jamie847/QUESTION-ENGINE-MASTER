@@ -4,7 +4,8 @@
 #   2. Shared vars live in an envVarGroup — not prose.
 #   3. DATABASE_URL is declared on EACH service (env groups cannot hold
 #      fromDatabase references).
-# No pgvector. Dedup is lexical (Q1 ruling d). Do not CREATE EXTENSION vector.
+# Dedup stays lexical (Q1 ruling d). WO-014 adds pgvector as a memory
+# catalog only — CREATE EXTENSION vector runs on deploy.
 
 databases:
   - name: question-engine-db
@@ -75,6 +76,14 @@ envVarGroups:
         value: "10"
       - key: PYTHON_VERSION
         value: "3.12.3"
+      - key: VOYAGE_API_KEY
+        sync: false
+      - key: EMBED_MODEL
+        value: voyage-4
+      - key: EMBED_DIMS
+        value: "512"
+      - key: MEMORY_SEARCHES_PER_DAY
+        value: "200"
 
 services:
   - type: web
@@ -86,7 +95,7 @@ services:
     # One-shot WO-011 link repair (later deploys print skipped=1).
     # --close-orphans fails running rows that no longer hold the lock
     # (a deploy that killed the worker).
-    preDeployCommand: python -m swarm.run_daily --repair-links --close-orphans
+    preDeployCommand: python -m swarm.run_daily --repair-links --close-orphans --backfill-memory
     startCommand: uvicorn dashboard.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /healthz
     envVars:

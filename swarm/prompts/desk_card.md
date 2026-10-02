@@ -11,5 +11,8 @@ Rules:
 - Pick three different shapes from the allowed list. Mark one picked and say why in one line. The other two are one line each.
 - Weekend test: one concrete action that could run in a weekend.
 - Red flags are shown, not resolved.
+- Past items from memory are context, not current fact. Re-check any claim they make.
+- If a similar idea was Killed, say what is different now, or say that nothing is.
+- If a similar idea was Parked, say whether today's evidence changes that.
 
 Return JSON via emit.

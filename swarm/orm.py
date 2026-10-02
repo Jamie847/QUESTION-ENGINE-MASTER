@@ -279,6 +279,7 @@ class OpportunityRow(Base):
     latest_verdict: Mapped[str] = mapped_column(String(16), default="")
     latest_verdict_why: Mapped[str] = mapped_column(Text, default="")
     latest_verdict_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    related_from_memory: Mapped[list[Any]] = mapped_column(JSONType, default=list)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -296,6 +297,40 @@ class OpportunityVerdictRow(Base):
     decided_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+
+
+class MemoryItemRow(Base):
+    """Derived card catalog. Raw text stays in its own tables (WO-014)."""
+
+    __tablename__ = "memory_items"
+    __table_args__ = (UniqueConstraint("kind", "ref_id", name="uq_memory_kind_ref"),)
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    kind: Mapped[str] = mapped_column(String(32), index=True)
+    ref_id: Mapped[str] = mapped_column(String(64), index=True)
+    text: Mapped[str] = mapped_column(Text, default="")
+    title: Mapped[str] = mapped_column(Text, default="")
+    run_id: Mapped[int] = mapped_column(Integer, index=True, default=0)
+    item_date: Mapped[str] = mapped_column(String(16), index=True, default="")
+    verticals: Mapped[list[Any]] = mapped_column(JSONType, default=list)
+    source_urls: Mapped[list[Any]] = mapped_column(JSONType, default=list)
+    embedding: Mapped[list[Any]] = mapped_column(JSONType, default=list)
+    embed_model: Mapped[str] = mapped_column(String(64), index=True, default="")
+    embed_dims: Mapped[int] = mapped_column(Integer, default=0)
+    verdict: Mapped[str] = mapped_column(String(16), default="")
+    verdict_why: Mapped[str] = mapped_column(Text, default="")
+    embedded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class MemorySearchDayRow(Base):
+    """Public Archive search meter. One row per UTC day."""
+
+    __tablename__ = "memory_search_days"
+
+    day: Mapped[str] = mapped_column(String(16), primary_key=True)
+    count: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class RunLockRow(Base):

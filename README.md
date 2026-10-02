@@ -4,7 +4,7 @@ A daily agentic swarm that **interrogates** emerging trends instead of summarizi
 
 Output is a structured digest in **Postgres** (SQLite locally) plus an interactive dashboard. Download any day as markdown for project knowledge. There are no GitHub commits from the cron — Render's filesystem is ephemeral, and the deploy repo is the wrong archive.
 
-Phase 1 on purpose: thinner swarm, Pydantic contracts, checkpoints, a run lock, a hard dollar budget, degraded-run tolerance, **lexical** dedup (no Voyage, no pgvector), a seeded taste file, rejected intersections next to the curator's kill floor, and a near-miss sample so paraphrase can be flagged by a person.
+Phase 1 on purpose: thinner swarm, Pydantic contracts, checkpoints, a run lock, a hard dollar budget, degraded-run tolerance, **lexical** dedup, a Voyage/pgvector **memory catalog** (WO-014 — recall and search, not dedup), a seeded taste file, rejected intersections next to the curator's kill floor, and a near-miss sample so paraphrase can be flagged by a person.
 
 ## Run locally
 
@@ -30,7 +30,7 @@ If the Anthropic key **is** set and every model call fails (a 400 is the usual c
 - `ANTHROPIC_MODEL` (default `claude-sonnet-5`) — scouts and smiths
 - `JUDGMENT_MODEL` (default `claude-fable-5`) — cross-pollinator, curator, and the opportunity desk
 - `ANTHROPIC_WORKSPACE_ID` — required if the key is identity-linked / multi-workspace (`wrkspc_…`). A key scoped to one workspace does not need it.
-- Dedup is **lexical** (no Voyage, no pgvector). `/healthz` reports `pgvector_installed: false` on purpose. See `docs/CP-RULING-dedup.md`.
+- Dedup is **lexical**. Voyage/pgvector are a memory catalog only (WO-014). `/healthz` reports `pgvector_installed` from the live extension, and `dedup: lexical`. See `docs/CP-RULING-dedup.md` and the 2026-10-02 supersede in `docs/CP-RULING-REQUEST-dedup.md`.
 
 The dashboard is open (`DASHBOARD_AUTH=off`). That is the intended posture (WO-005), not a defect. Spend is bounded by `RUN_BUDGET_USD` per run, `MAX_RUNS_PER_DAY` (default 5), and a per-IP cooldown on `POST /api/run`. Set `DASHBOARD_AUTH` to any other value to turn the token gate back on.
 
@@ -42,8 +42,8 @@ The dashboard is open (`DASHBOARD_AUTH=off`). That is the intended posture (WO-0
 4. **Smiths** — one lens each.
 5. **Dedup** — lexical (content-token Jaccard) against the batch and the last 45 days. Does not catch paraphrase. The digest samples adjacent-day survivors so a person can flag a miss.
 6. **Curator** — taste seed (later: weekly compressed profile + rotating exemplars).
-7. **Desk** — optional. Assays the top linked questions (and anything saved since the last run), checks the premise, and writes a Pursue/Park/Kill card. Skipped when the run budget is spent. Cited pages are not fetched; cards say so.
-8. **Archivist** — markdown digest written to the database.
+7. **Desk** — optional. Assays the top linked questions (and anything saved since the last run), checks the premise, and writes a Pursue/Park/Kill card. Skipped when the run budget is spent. Cited pages are not fetched; cards say so. Each card shows *Related from memory* from earlier runs.
+8. **Archivist** — markdown digest written to the database. Then an optional memory embed of that run's new items. Voyage failure never blocks the digest.
 
 `--resume <run_id>` continues from the last finished stage. Runs are **manual only until the Operator rates the five existing digests** (CP 2026-09-08). After that the weekday cron is `0 10 * * 1-5`. Until then the Blueprint schedule stays 29 February (Render requires a schedule field). Both manual paths stay: Controls → Run swarm now (`POST /api/run`) and Render → cron → Trigger Run. A lock prevents overlap. Digests are unique per **run**, not per date — a second same-day click keeps the first digest. Today and the digest footer show how old the last run is.
 
@@ -51,7 +51,7 @@ The dashboard is open (`DASHBOARD_AUTH=off`). That is the intended posture (WO-0
 
 - **Today** — opportunities from this run, digest, 1–5★ ratings, Assay this, promote-to-ideation, coverage flags, rejects, kill floor.
 - **Opportunities** — every checked card, newest first, filterable by verdict.
-- **Archive** — search/filter the question bank; per-day `.md` download.
+- **Archive** — search/filter the question bank; **Search memory** across every run; per-day `.md` download.
 - **Taste** — seeded keep/kill exemplars, the Operator's assets profile, your ratings, and a lexical-duplicate count that is labeled as token overlap only.
 - **Issues** — The Correspondent. Weekly essay draft from the week's best question. Never auto-published. `GET /issues/{date}.md`.
 - **Controls** — manual run, source health, verticals/lenses.
@@ -75,6 +75,7 @@ The dashboard is open (`DASHBOARD_AUTH=off`). That is the intended posture (WO-0
    - `BRAVE_API_KEY` (required for Health and Business scouts)
    - `EIA_API_KEY` / `FRED_API_KEY` (optional; Commodities movers stay dark without them)
    - `REDDIT_CLIENT_ID` / `REDDIT_CLIENT_SECRET` (application-only OAuth; without them Reddit errors instead of returning a silent zero)
+   - `VOYAGE_API_KEY` (optional; without it the digest still archives and the footer reads *memory not updated*)
    - Leave `PERPLEXITY_API_KEY` blank. CP ruled no Perplexity.
 4. Open `https://question-engine-dashboard.onrender.com/controls` and click **Run swarm now**.
 5. Prove infra before trusting a digest: `GET /healthz` on the web service, and `python -m swarm.run_daily --healthcheck` on the cron (look for `CRON_HEALTHCHECK_PASS`).

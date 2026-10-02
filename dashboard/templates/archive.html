@@ -14,6 +14,52 @@
   </p>
 </section>
 
+<section class="memory-search">
+  <h2>Search memory</h2>
+  <p class="hint">What we already researched, across every run. Dated. Not current fact.</p>
+  <form class="filters memory-filters" method="get" action="/archive">
+    {% if saved %}<input type="hidden" name="saved" value="1">{% endif %}
+    <input type="search" name="mq" value="{{ mq }}" placeholder="GLP-1s, the earnings rule, 425.112">
+    <select name="mkind">
+      <option value="">All kinds</option>
+      {% for k in ["question", "brief", "intersection", "opportunity", "verdict"] %}
+      <option value="{{ k }}" {% if mkind == k %}selected{% endif %}>{{ k }}</option>
+      {% endfor %}
+    </select>
+    <select name="mvertical">
+      <option value="">All verticals</option>
+      {% for v in verticals %}
+      <option value="{{ v.id }}" {% if mvertical == v.id %}selected{% endif %}>{{ v.name }}</option>
+      {% endfor %}
+    </select>
+    <select name="msort">
+      <option value="" {% if msort != "newest" %}selected{% endif %}>Best match</option>
+      <option value="newest" {% if msort == "newest" %}selected{% endif %}>Newest first</option>
+    </select>
+    <button type="submit">Search memory</button>
+  </form>
+  <p class="muted">{{ memory_remaining }} searches left today.</p>
+  {% if memory_error %}
+  <p class="warns">{{ memory_error }}</p>
+  {% endif %}
+  {% if mq and not memory_error %}
+    {% if memory_results %}
+    <ul class="memory-hits">
+      {% for hit in memory_results %}
+      <li>
+        <span class="verts">{{ hit.item_date }} · {{ hit.kind }}</span>
+        <a href="{{ hit.href }}">{{ hit.title or hit.text[:80] }}</a>
+        {% if hit.verdict %} · {{ hit.verdict }}{% if hit.verdict_why %} — {{ hit.verdict_why }}{% endif %}{% endif %}
+        <span class="muted"> · <a href="/digest/run/{{ hit.run_id }}">run {{ hit.run_id }}</a></span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="empty-inline">Nothing in memory matches. Try fewer words, or run the swarm so the catalog fills.</p>
+    {% endif %}
+  {% endif %}
+</section>
+
 <form class="filters" method="get" action="/archive">
   <input type="search" name="q" value="{{ q }}" placeholder="Search questions">
   <select name="lens">

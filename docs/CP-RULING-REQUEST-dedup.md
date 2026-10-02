@@ -99,3 +99,8 @@ Spec v1.1 §3.3 still declares `embedding: list[float]` as a required field on `
 nothing in the spec records that. Supersede in place rather than deleting — the old lines are
 the only record that the vector approach was ever the design, and a deleted line teaches a
 future reader nothing.
+
+**Superseded in place 2026-10-02 (WO-014, Operator-directed):** a vector index was added
+for memory (recall and search). Dedup remains lexical pending the paraphrase measurement
+and calibration. The 2026-09-01 ruling is reopened for this new purpose only. Duplicate
+checking does not read `memory_items`. Do not delete the 2026-09-01 text above.

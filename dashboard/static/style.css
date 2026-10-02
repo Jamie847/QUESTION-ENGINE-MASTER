@@ -412,6 +412,14 @@ code { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.86em;
   background: var(--card);
 }
 
+.memory-search { margin: 1.5rem 0 2rem; padding-bottom: 1rem; border-bottom: 1px solid var(--rule); }
+.memory-hits { list-style: none; padding: 0; }
+.memory-hits li { padding: 0.55rem 0; border-bottom: 1px dashed var(--rule); }
+.memory-related { margin: 1.1rem 0; }
+@media (min-width: 720px) {
+  .memory-filters { grid-template-columns: 2fr 1fr 1fr 1fr auto; }
+}
+
 @media (max-width: 640px) {
   .mast { flex-direction: column; align-items: flex-start; }
   .q-actions { flex-direction: column; align-items: flex-start; }
