@@ -204,11 +204,16 @@ def test_s3_adapters_parse_fixtures_with_snippet_and_source_id():
 def test_s4_science_and_education_are_phase_one_with_draft_queries():
     """Red against a loader that still exposes only ai, health, and business."""
     ids = [row["id"] for row in verticals()]
-    assert ids == ["ai", "health", "business", "science", "education"]
+    assert ids[:5] == ["ai", "health", "business", "science", "education"]
+    assert "geopolitics" in ids
+    assert "commodities" in ids
     text = Path("swarm/config/verticals.yaml").read_text(encoding="utf-8")
     assert "Operator added 2026-09-30" in text
     assert "# draft — tune after first run" in text
+    assert "Operator decision 2026-10-02" in text
     for row in verticals():
+        if row["id"] in {"geopolitics", "commodities"}:
+            continue
         assert row.get("arxiv_categories"), row["id"]
         assert row.get("openalex_terms"), row["id"]
         assert "journal_feeds" in row

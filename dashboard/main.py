@@ -36,7 +36,6 @@ from swarm.display import (
     run_banner,
     run_stamp,
 )
-from swarm.display_time import format_run_stamp
 from swarm.settings import get_settings
 from dashboard.public_text import public_page_text, public_run_error, public_warning
 from dashboard.run_limits import (
@@ -55,6 +54,7 @@ from dashboard.honesty import (
     model_written_line,
     scout_seen,
     pairing_reason,
+    banned_words_line,
     sources_linked_line,
     sources_read_line,
     split_warnings,
@@ -354,8 +354,6 @@ def today(request: Request):
             cost_usd=run.cost_usd or 0.0,
             status=run.status or "",
         )
-        if run.started_at:
-            banner = f"{banner} · {format_run_stamp(run.started_at, settings.display_tz)}"
         stamp = run_stamp(run.id, run.started_at)
         stamps = {q.id: stamp for q in questions}
     briefs_by_id = {b.id: b for b in briefs}
@@ -385,7 +383,7 @@ def today(request: Request):
         )
         for row in saved:
             session.expunge(row)
-    linked_line, linked_warn = sources_linked_line(curated)
+    linked_line, linked_warn = sources_linked_line(questions, briefs_by_id)
     return templates.TemplateResponse(
         request,
         "today.html",
@@ -431,6 +429,7 @@ def today(request: Request):
             "saved": saved,
             "sources_linked_line": linked_line,
             "sources_linked_warn": linked_warn,
+            "banned_words_line": banned_words_line(questions, intersections),
             "pairing_reason": pairing_reason(page_warnings + debug_lines),
         },
     )

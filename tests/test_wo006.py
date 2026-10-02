@@ -415,8 +415,8 @@ def test_f7_today_page_uses_display_tz(monkeypatch):
         )
     page = TestClient(app).get("/")
     assert page.status_code == 200
-    assert "Sep 29, 8:30 PM MDT" in page.text
-    assert "2026-09-29" in page.text
+    assert "Sep 29, 2026 · 8:30 PM MDT" in page.text
+    assert page.text.count("8:30 PM MDT") == 1
     get_settings.cache_clear()
 
 

@@ -1,6 +1,6 @@
 # Question Engine
 
-A daily agentic swarm that **interrogates** emerging trends instead of summarizing them. It pulls signals across a thin set of verticals (AI, Health, Business/Finance), hunts for non-obvious intersections, writes questions through three lenses (contrarian, second-order, opportunity), and lets a curator kill anything generic.
+A daily agentic swarm that **interrogates** emerging trends instead of summarizing them. It pulls signals across AI, Health, Business/Finance, Science, Education, Geopolitics, and Commodities & Industry, hunts for non-obvious intersections, writes questions through three lenses (contrarian, second-order, opportunity), and lets a curator kill anything generic.
 
 Output is a structured digest in **Postgres** (SQLite locally) plus an interactive dashboard. Download any day as markdown for project knowledge. There are no GitHub commits from the cron — Render's filesystem is ephemeral, and the deploy repo is the wrong archive.
 
@@ -36,7 +36,7 @@ The dashboard is open (`DASHBOARD_AUTH=off`). That is the intended posture (WO-0
 
 ## Daily pipeline
 
-1. **Fetch** — Brave (if keyed), HN, Reddit (OAuth), Wikipedia, Federal Register. A dead source (N consecutive zeros) is named **dead**, not quiet. It does not abort the run. No Perplexity.
+1. **Fetch** — Brave (if keyed), HN, Wikipedia, Federal Register (final/proposed rules only), arXiv, journals, GDELT, ReliefWeb, CFTC, and EIA/FRED when those free keys are set. A dead source (N consecutive zeros) is named **dead**, not quiet. It does not abort the run. No Perplexity.
 2. **Scout** — one pass per enabled vertical → structured briefs.
 3. **Cross-pollinator** — intersections with surprise, plausibility, and a **coverage** score (`none` / `thin` / `crowded` / `unknown`). Coverage is visible. It cannot promote a question. Rejected pairings are persisted.
 4. **Smiths** — one lens each.
@@ -71,6 +71,7 @@ The dashboard is open (`DASHBOARD_AUTH=off`). That is the intended posture (WO-0
 3. When prompted, paste:
    - `ANTHROPIC_API_KEY` (required for a real digest)
    - `BRAVE_API_KEY` (required for Health and Business scouts)
+   - `EIA_API_KEY` / `FRED_API_KEY` (optional; Commodities movers stay dark without them)
    - `REDDIT_CLIENT_ID` / `REDDIT_CLIENT_SECRET` (application-only OAuth; without them Reddit errors instead of returning a silent zero)
    - Leave `PERPLEXITY_API_KEY` blank. CP ruled no Perplexity.
 4. Open `https://question-engine-dashboard.onrender.com/controls` and click **Run swarm now**.

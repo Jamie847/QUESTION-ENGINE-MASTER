@@ -61,6 +61,12 @@ verticals:
       - "artificial intelligence"
     sam_naics:
       - "541512"
+    # draft — tune after first run
+    federal_register_agencies:
+      - bureau-of-industry-and-security
+      - commerce-department
+      - national-institute-of-standards-and-technology
+      - federal-communications-commission
 
   - id: health
     name: Health
@@ -128,6 +134,11 @@ verticals:
       - hospital
     sam_naics:
       - "622110"
+    # draft — tune after first run
+    federal_register_agencies:
+      - food-and-drug-administration
+      - centers-for-medicare-medicaid-services
+      - health-and-human-services-department
 
   - id: business
     name: Business/Finance
@@ -189,6 +200,12 @@ verticals:
       - "financial services"
     sam_naics:
       - "522110"
+    # draft — tune after first run
+    federal_register_agencies:
+      - treasury-department
+      - securities-and-exchange-commission
+      - commodity-futures-trading-commission
+      - federal-trade-commission
 
   - id: science
     name: Science
@@ -275,3 +292,115 @@ verticals:
       - education
     sam_naics:
       - "611110"
+    # draft — tune after first run
+    federal_register_agencies:
+      - education-department
+
+  # Operator decision 2026-10-02: Geopolitics and Commodities & Industry are
+  # phase 1. Culture stays on the backlog.
+  - id: geopolitics
+    name: Geopolitics
+    enabled: true
+    phase: 1
+    # draft — tune after first run
+    search_queries:
+      - "sanctions export controls"
+      - "ceasefire humanitarian corridor"
+    gdelt_queries:
+      - "sanctions OR \"export control\" OR ceasefire"
+      - "\"taiwan strait\" OR \"red sea\" OR \"strait of hormuz\""
+    reliefweb_queries:
+      - "humanitarian"
+      - "displacement"
+    brave_queries:
+      - "sanctions package"
+      - "export controls semiconductor"
+    reddit_subs: []
+    hn_keywords:
+      - sanctions
+      - ceasefire
+      - NATO
+      - Taiwan
+    keywords:
+      - sanctions
+      - geopolitics
+      - ceasefire
+      - ofac
+      - "export control"
+      - embassy
+      - nato
+      - taiwan
+      - ukraine
+      - gaza
+    federal_register_agencies:
+      - office-of-foreign-assets-control
+      - bureau-of-industry-and-security
+      - state-department
+      - treasury-department
+    arxiv_categories: []
+    openalex_terms: []
+    journal_feeds: []
+    sam_keywords: []
+    sam_naics: []
+
+  - id: commodities
+    name: Commodities & Industry
+    enabled: true
+    phase: 1
+    # draft — tune after first run
+    search_queries:
+      - "crude inventory draw"
+      - "industrial production commodities"
+    hn_keywords:
+      - oil
+      - copper
+      - inventory
+    keywords:
+      - oil
+      - crude
+      - copper
+      - inventory
+      - commodity
+      - commodities
+      - opec
+      - tanker
+      - refinery
+    federal_register_agencies:
+      - energy-department
+      - environmental-protection-agency
+      - agriculture-department
+      - interior-department
+    # draft — tune after first run
+    series:
+      - id: PET.WCRSTUS1.W
+        provider: eia
+        label: US crude inventories
+        unit: "M barrels"
+        scale: 1
+      - id: PET.WTTSTUS1.W
+        provider: eia
+        label: US total petroleum inventories
+        unit: "M barrels"
+        scale: 1
+      - id: DCOILWTICO
+        provider: fred
+        label: WTI crude
+        unit: "USD/bbl"
+      - id: PCOPPUSDM
+        provider: fred
+        label: Global copper
+        unit: "USD/metric ton"
+      - id: INDPRO
+        provider: fred
+        label: US industrial production
+        unit: "index"
+      - id: CRUDE_OIL
+        provider: cftc
+        market: "CRUDE OIL"
+        label: CFTC crude non-commercial longs
+        unit: "contracts"
+    arxiv_categories: []
+    openalex_terms: []
+    journal_feeds: []
+    sam_keywords: []
+    sam_naics: []

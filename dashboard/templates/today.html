@@ -12,7 +12,7 @@
 {% else %}
 
 <section class="lede">
-  <p class="kicker">{{ run_banner or digest.date }}{% if digest.date %} · {{ digest.date }}{% endif %}{% if digest.degraded %} · degraded{% endif %}</p>
+  <p class="kicker">{{ run_banner or digest.date }}{% if digest.degraded %} · degraded{% endif %}</p>
   <p class="last-run {% if digest_stale %}stale{% endif %}">
     {{ last_run_label }}
     {% if digest_stale %}

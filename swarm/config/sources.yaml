@@ -24,3 +24,13 @@ sources:
     enabled: true
   - id: sam_gov
     enabled: true
+  - id: gdelt
+    enabled: true
+  - id: reliefweb
+    enabled: true
+  - id: eia
+    enabled: true
+  - id: fred
+    enabled: true
+  - id: cftc
+    enabled: true

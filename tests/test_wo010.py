@@ -116,9 +116,23 @@ def _seed_today(*, warnings: list[str], questions: list[dict], git_commit: str =
         session.flush()
         rid = run.id
         ids = []
+        seeded_briefs: set[str] = set()
         for i, q in enumerate(questions, start=1):
             qid = q.get("id") or f"wo010-{rid}-{i}"
             ids.append(qid)
+            for bid in q.get("brief_ids", ["b-1"]):
+                if not bid or bid in seeded_briefs:
+                    continue
+                seeded_briefs.add(bid)
+                session.add(
+                    BriefRow(
+                        id=bid,
+                        run_id=rid,
+                        vertical="health",
+                        headline=bid,
+                        sources=[f"https://example.com/{bid}"],
+                    )
+                )
             session.add(
                 QuestionRow(
                     id=qid,

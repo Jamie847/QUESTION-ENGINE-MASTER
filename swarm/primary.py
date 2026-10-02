@@ -56,25 +56,14 @@ def looks_like_record(*texts: str) -> bool:
 def prefer_primary_urls(
     text: str, claimed: list[str], signals: list[Signal]
 ) -> list[str]:
-    """When the brief is about a rule/docket/filing/paper, cite the record first."""
-    claimed = [u for u in claimed if u]
+    """Reorder claimed URLs so a cited primary record leads. Never add a neighbour."""
+    allowed = {sig.url for sig in signals if getattr(sig, "url", "")}
+    claimed = [u for u in claimed if u and (not allowed or u in allowed)]
     if not looks_like_record(text):
         return claimed
-    overlap: list[str] = []
-    any_primary: list[str] = []
-    for sig in signals:
-        if not sig.url or not is_primary(source=sig.source, url=sig.url):
-            continue
-        any_primary.append(sig.url)
-        blob = f"{sig.title} {sig.snippet}"
-        if _token_overlap(text, blob) >= 2:
-            overlap.append(sig.url)
-    lead = overlap or any_primary
-    out: list[str] = []
-    for url in lead + claimed:
-        if url and url not in out:
-            out.append(url)
-    return out
+    primaries = [u for u in claimed if is_primary(url=u)]
+    rest = [u for u in claimed if u not in primaries]
+    return primaries + rest
 
 
 def _token_overlap(a: str, b: str) -> int:

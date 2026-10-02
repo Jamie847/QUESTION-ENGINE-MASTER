@@ -54,6 +54,7 @@ SCHEMA = {
 def run_cross_pollinator(
     briefs: list[Brief], llm: LLM, *, run_id: int = 0
 ) -> list[Intersection]:
+    run_cross_pollinator.passed_over = []  # type: ignore[attr-defined]
     produced = _llm(briefs, llm, run_id)
     if produced is None:
         if llm.available:
@@ -86,28 +87,37 @@ def _llm(briefs: list[Brief], llm: LLM, run_id: int) -> list[Intersection] | Non
         return None
     by_headline = {b.headline: b for b in briefs}
     out: list[Intersection] = []
+    passed_over: list[str] = []
     for raw in data.get("intersections") or []:
         try:
             thesis = raw["thesis"]
             heads = raw.get("brief_headlines") or []
             brief_ids = [by_headline[h].id for h in heads if h in by_headline]
+            verts = [v for v in (raw.get("verticals") or []) if v]
+            accepted = bool(raw.get("accepted"))
+            reason = raw.get("reject_reason") or ""
+            if accepted and len(set(verts)) < 2:
+                accepted = False
+                reason = "single field"
+                passed_over.append(f"Cross-pollinator passed over: single field — {thesis[:80]}")
             out.append(
                 Intersection(
                     id=f"r{run_id}-{slug(thesis)}",
-                    verticals=raw.get("verticals") or [],
+                    verticals=verts,
                     thesis=thesis,
                     surprise=float(raw.get("surprise") or 0),
                     plausibility=float(raw.get("plausibility") or 0),
                     coverage=Coverage(raw.get("coverage") or "unknown"),
                     coverage_notes=raw.get("coverage_notes") or "",
-                    accepted=bool(raw.get("accepted")),
-                    reject_reason=raw.get("reject_reason") or "",
+                    accepted=accepted,
+                    reject_reason=reason,
                     brief_ids=brief_ids,
                     written_by=llm.writer_name(judgment=True),
                 )
             )
         except Exception:
             continue
+    run_cross_pollinator.passed_over = passed_over  # type: ignore[attr-defined]
     return out or None
 
 

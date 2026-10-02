@@ -139,6 +139,7 @@ def _llm_briefs(
     for raw in data.get("briefs") or []:
         try:
             headline = raw["headline"]
+            claimed = urls_from_model(raw, labels)
             urls = prefer_primary_urls(
                 " ".join(
                     [
@@ -147,7 +148,7 @@ def _llm_briefs(
                         raw.get("why_now", ""),
                     ]
                 ),
-                urls_from_model(raw, labels),
+                claimed,
                 [sig for sig, _rank in pairs],
             )
             out.append(
@@ -201,4 +202,6 @@ def _who(vertical: str) -> str:
         "business": "operators, allocators, and the workers on the wrong side of the adjustment",
         "science": "labs, funders, and the fields waiting on the result",
         "education": "students, teachers, and the institutions that credential them",
+        "geopolitics": "governments, firms in the blast radius, and the people crossing the border",
+        "commodities": "producers, traders, and the operators who price the physical",
     }.get(vertical, "people inside the institutions this actually touches")
