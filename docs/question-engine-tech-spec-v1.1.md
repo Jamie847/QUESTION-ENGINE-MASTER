@@ -218,6 +218,12 @@ purpose. Do not `CREATE EXTENSION vector`.
 
 Quiet weeks do not count. See `docs/CP-RULING-dedup.md`.
 
+**Superseded in place 2026-10-02 (WO-014):** a vector index was added for memory
+(recall and search across runs) on the same Postgres, via pgvector and Voyage.
+`/healthz` reports `pgvector_installed` from `pg_extension`, not a hardcoded false.
+**Dedup remains lexical** pending the paraphrase measurement (`scripts/measure_paraphrase_leak.py --embed`)
+and calibration. Do not switch stage 4 to cosine. Do not delete the 2026-09-01 text above.
+
 ### 3.5 Curator
 
 Taste seed is `taste/seed.yaml` if present, else `data/taste_seed.yaml`.

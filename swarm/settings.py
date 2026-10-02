@@ -76,6 +76,22 @@ class Settings(BaseSettings):
     assays_per_day: int = 10
     desk_reserve_usd: float = 0.40
     desk_cost_estimate_usd: float = 0.31
+    voyage_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("VOYAGE_API_KEY"),
+    )
+    embed_model: str = Field(
+        default="voyage-4",
+        validation_alias=AliasChoices("EMBED_MODEL"),
+    )
+    embed_dims: int = Field(
+        default=512,
+        validation_alias=AliasChoices("EMBED_DIMS"),
+    )
+    memory_searches_per_day: int = Field(
+        default=200,
+        validation_alias=AliasChoices("MEMORY_SEARCHES_PER_DAY"),
+    )
 
     @computed_field  # type: ignore[prop-decorator]
     @property

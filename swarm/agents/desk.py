@@ -12,6 +12,7 @@ from swarm.config import business_shapes
 from swarm.db import session_scope
 from swarm.desk.assets import load_assets
 from swarm.desk.select import select_for_desk
+from swarm.memory.recall import format_for_prompt, recall_for_desk
 from swarm.desk.validate import (
     apply_number_rule,
     evidence_blob,
@@ -185,6 +186,7 @@ def _card_user(
     claims: list[dict[str, Any]],
     searches: list[dict[str, Any]],
     assets: dict[str, str],
+    related_memory: list[dict[str, Any]] | None = None,
 ) -> str:
     lines = [
         f"Question: {getattr(question, 'title', '')}",
@@ -218,6 +220,8 @@ def _card_user(
                 lines.append(f"- {key}: {val}")
     else:
         lines.append("(empty — leave fit blank)")
+    lines.append("")
+    lines.append(format_for_prompt(related_memory or []))
     return "\n".join(lines)
 
 
@@ -229,10 +233,13 @@ def write_card(
     searches: list[dict[str, Any]],
     assets: dict[str, str],
     llm: LLM,
+    related_memory: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any] | None:
     return llm.complete_json(
         system=CARD_PROMPT,
-        user=_card_user(question, briefs, claims, searches, assets),
+        user=_card_user(
+            question, briefs, claims, searches, assets, related_memory
+        ),
         schema=CARD_SCHEMA,
         max_tokens=4000,
         judgment=True,
@@ -378,6 +385,7 @@ def _persist(run_id: int, question_id: str, payload: dict[str, Any], *, on_deman
         row.red_flags = payload.get("red_flags") or []
         row.check_note = payload.get("check_note") or CHECK_NOTE
         row.searches = payload.get("searches") or []
+        row.related_from_memory = payload.get("related_from_memory") or []
         row.written_by = written_by
         row.cost_usd = cost
         row.on_demand = on_demand
@@ -438,6 +446,10 @@ def run_desk(
             continue
         searches = collect_searches(named, searcher)
         n_searches = len({h.get("query") for h in searches if h.get("query")})
+        memory = recall_for_desk(
+            f"{getattr(row, 'title', '')} {getattr(row, 'text', '')}".strip(),
+            run_id=run_id,
+        )
         draft = write_card(
             question=row,
             briefs=related,
@@ -445,6 +457,7 @@ def run_desk(
             searches=searches,
             assets=profile,
             llm=llm,
+            related_memory=memory,
         )
         llm.agent = started_agent
         if draft is None:
@@ -461,6 +474,7 @@ def run_desk(
         )
         cost = max(0.0, llm.budget.spent_usd - before)
         built["cost_usd"] = cost
+        built["related_from_memory"] = memory
         built["question_id"] = row.id
         built["id"] = _persist(
             run_id,

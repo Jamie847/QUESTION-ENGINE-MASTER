@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
 from swarm.config import lenses, verticals
-from swarm.db import init_db, ping_db, session_scope
+from swarm.db import init_db, pgvector_installed, ping_db, session_scope
 from swarm.dedup import sample_near_miss_pairs
 from swarm.lock import current_lock, locked_run_id
 from swarm.publish_gate import gate_reasons, publish_gate_open
@@ -165,7 +165,7 @@ def health() -> dict:
     return {
         "ok": db_ok,
         "database": db_ok,
-        "pgvector_installed": False,
+        "pgvector_installed": pgvector_installed(),
         "dedup": "lexical",
         "commit": get_settings().short_commit or get_settings().git_commit or "",
     }
@@ -295,6 +295,7 @@ def _opportunity_view(row: OpportunityRow) -> dict:
         "latest_verdict": row.latest_verdict,
         "latest_verdict_why": row.latest_verdict_why,
         "verdict_history": verdict_history(row.id),
+        "related_from_memory": row.related_from_memory or [],
     }
 
 
@@ -534,6 +535,10 @@ def archive(
     coverage: str = "",
     rating: str = "",
     saved: str = "",
+    mq: str = "",
+    mkind: str = "",
+    mvertical: str = "",
+    msort: str = "",
 ):
     with session_scope() as session:
         stmt = select(QuestionRow)
@@ -602,6 +607,27 @@ def archive(
             session.expunge(r)
         for d in digests:
             session.expunge(d)
+    memory_results: list[dict] = []
+    memory_error = ""
+    memory_remaining = 0
+    from swarm.memory.search_cap import remaining_searches, take_search
+    from swarm.memory.store import search_memory
+
+    memory_remaining = remaining_searches()
+    if mq.strip():
+        if not take_search():
+            memory_error = (
+                "Search memory cap reached for today "
+                f"({get_settings().memory_searches_per_day} / day)."
+            )
+        else:
+            memory_results = search_memory(
+                mq,
+                kind=mkind,
+                vertical=mvertical,
+                newest=msort == "newest",
+            )["results"]
+            memory_remaining = remaining_searches()
     return templates.TemplateResponse(
         request,
         "archive.html",
@@ -623,6 +649,13 @@ def archive(
             "saved": saved,
             "lenses": lenses(),
             "verticals": verticals(),
+            "mq": mq,
+            "mkind": mkind,
+            "mvertical": mvertical,
+            "msort": msort,
+            "memory_results": memory_results,
+            "memory_error": memory_error,
+            "memory_remaining": memory_remaining,
         },
     )
 

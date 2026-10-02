@@ -42,6 +42,7 @@ def init_db() -> None:
     _migrate_digest_uniqueness(engine)
     _migrate_wo006(engine)
     _migrate_wo008(engine)
+    _migrate_wo014(engine)
 
 
 def _migrate_digest_uniqueness(engine: Engine) -> None:
@@ -194,6 +195,68 @@ def session_scope() -> Iterator[Session]:
         raise
     finally:
         session.close()
+
+
+def _migrate_wo014(engine: Engine) -> None:
+    """Memory catalog + pgvector. Dedup stays lexical."""
+    json_type = "JSON" if engine.dialect.name == "postgresql" else "TEXT"
+    with engine.begin() as conn:
+        cols = _column_names(conn, engine, "opportunities")
+        if cols and "related_from_memory" not in cols:
+            conn.execute(
+                text(
+                    f"ALTER TABLE opportunities ADD COLUMN related_from_memory {json_type}"
+                )
+            )
+        if engine.dialect.name != "postgresql":
+            return
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+        mem_cols = _column_names(conn, engine, "memory_items")
+        if mem_cols and "embedding_vec" not in mem_cols:
+            conn.execute(text("ALTER TABLE memory_items ADD COLUMN embedding_vec vector"))
+        conn.execute(
+            text(
+                """
+                CREATE INDEX IF NOT EXISTS memory_items_fts_idx
+                ON memory_items
+                USING gin (
+                    to_tsvector(
+                        'english',
+                        coalesce(text, '') || ' ' || coalesce(title, '')
+                    )
+                )
+                """
+            )
+        )
+    if engine.dialect.name == "postgresql":
+        try:
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        """
+                        CREATE INDEX IF NOT EXISTS memory_items_vec_idx
+                        ON memory_items USING hnsw (embedding_vec vector_cosine_ops)
+                        """
+                    )
+                )
+        except Exception:
+            # All-null vectors on first boot: JSON + FTS still work.
+            pass
+
+
+def pgvector_installed() -> bool:
+    """True only when the live database actually has the vector extension."""
+    engine = get_engine()
+    if engine.dialect.name != "postgresql":
+        return False
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(
+                text("SELECT 1 FROM pg_extension WHERE extname = 'vector'")
+            ).first()
+            return row is not None
+    except Exception:
+        return False
 
 
 def ping_db() -> bool:

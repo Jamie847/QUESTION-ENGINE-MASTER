@@ -97,7 +97,7 @@ def _gray_zone(
 
 def _voyage_embed(texts: list[str], key: str) -> list[list[float]]:
     body = json.dumps(
-        {"input": texts, "model": "voyage-3-lite", "input_type": "document"}
+        {"input": texts, "model": os.environ.get("EMBED_MODEL", "voyage-4"), "input_type": "document"}
     ).encode()
     req = urllib.request.Request(
         "https://api.voyageai.com/v1/embeddings",
