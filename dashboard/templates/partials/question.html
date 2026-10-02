@@ -1,26 +1,38 @@
-<article class="q" data-id="{{ q.id }}" data-verts="{{ (q.verticals or []) | join(' ') }}">
+<article class="q" data-id="{{ q.id }}">
+  {% if q.title %}
+  <p class="q-title">{{ q.title }}</p>
+  {% endif %}
   <p class="q-text">{{ q.text }}</p>
   <div class="q-meta">
-    {% if q.written_by == 'template' %}<span class="tag">template</span>{% endif %}
     <span>{{ q.lens }}</span>
     <span>{{ (q.verticals or []) | join(" × ") }}</span>
     <span class="cov cov-{{ q.coverage }}">coverage (model guess) {{ q.coverage }}</span>
     <span>{{ q.decay_class }}</span>
     {% if q.rank %}<span>rank {{ q.rank }}</span>{% endif %}
-    {% if q.run_id %}
-    <span>run {{ q.run_id }}{% if run_dates is defined and run_dates.get(q.run_id) %} · {{ fmt_stamp(run_dates.get(q.run_id)) }}{% elif run is defined and run %} · {{ fmt_stamp(run.started_at) }}{% endif %}</span>
-    {% endif %}
+    {% if run_stamps is defined and run_stamps.get(q.id) %}<span>{{ run_stamps[q.id] }}</span>{% endif %}
+    {% if q.written_by == "template" %}<span class="pill template">template</span>{% endif %}
   </div>
-  <p class="from">From:
-    {% if q.from_line %}
-      {{ q.from_line }}
+  {% if from_cites is defined %}
+    {% set cite = from_cites.get(q.id) %}
+    {% if cite and not cite.unrecorded %}
+    <div class="q-from">
+      {% if cite.summary %}
+      <p class="q-summary">Summary: {{ cite.summary }}</p>
+      {% endif %}
+      <p>From:
+        {% for c in cite.cites %}
+        <a href="{{ c.url }}">{{ c.title }} ({{ c.domain }})</a>{% if c.primary %} <span class="pill primary">primary</span>{% endif %}{% if not loop.last %} · {% endif %}
+        {% else %}
+        {{ unrecorded if unrecorded is defined else "sources not recorded" }}
+        {% endfor %}
+      </p>
+    </div>
     {% else %}
-      {% for link in q.from_links or [] %}
-        {% if link.url %}<a href="{{ link.url }}">{{ link.headline }}</a>{% else %}{{ link.headline }}{% endif %}
-        {% if link.source %}<span class="muted">({{ link.source }})</span>{% endif %}
-      {% endfor %}
+    <p class="q-from">From: {{ unrecorded if unrecorded is defined else "sources not recorded" }}</p>
     {% endif %}
-  </p>
+  {% elif from_lines is defined %}
+  <p class="q-from">From: {{ from_lines.get(q.id, "sources not recorded") }}</p>
+  {% endif %}
   {% if q.context %}
   <p class="q-ctx">{{ q.context }}</p>
   {% endif %}
@@ -29,10 +41,10 @@
       {% for n in range(1, 6) %}
       <button type="button" data-star="{{ n }}" class="{% if ratings.get(q.id, 0) >= n %}on{% endif %}" aria-label="{{ n }} stars">★</button>
       {% endfor %}
-      <input type="text" class="why" maxlength="240" placeholder="why (optional)" aria-label="why this rating">
+      <input class="why" type="text" maxlength="200" placeholder="why (optional)" value="{{ rating_whys.get(q.id, '') if rating_whys is defined else '' }}" aria-label="why">
     </div>
     <button type="button" class="text-btn promote" data-qid="{{ q.id }}" {% if q.promoted %}disabled{% endif %}>
-      {% if q.promoted %}Saved — ideation not built yet.{% else %}Save for ideation{% endif %}
+      {% if q.promoted %}Saved{% else %}Save for ideation{% endif %}
     </button>
   </div>
 </article>

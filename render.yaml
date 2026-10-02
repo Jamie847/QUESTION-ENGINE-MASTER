@@ -53,6 +53,8 @@ envVarGroups:
         value: claude-fable-5
       - key: ANTHROPIC_MODEL
         value: claude-sonnet-5
+      - key: FALLBACK_MODEL
+        value: claude-opus-5-5
       - key: RUN_BUDGET_USD
         value: "5.00"
       - key: RUN_TOKEN_CAP

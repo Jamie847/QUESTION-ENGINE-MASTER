@@ -45,6 +45,7 @@ class RunRow(Base):
     stages: Mapped[list[Any]] = mapped_column(JSONType, default=list)
     curated_by: Mapped[str] = mapped_column(String(128), default="")
     scout_seen: Mapped[dict[str, Any]] = mapped_column(JSONType, default=dict)
+    git_commit: Mapped[str] = mapped_column(String(64), default="")
 
     briefs: Mapped[list[BriefRow]] = relationship(back_populates="run")
     intersections: Mapped[list[IntersectionRow]] = relationship(back_populates="run")
@@ -114,6 +115,7 @@ class QuestionRow(Base):
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     run_id: Mapped[int] = mapped_column(ForeignKey("runs.id"), index=True)
     text: Mapped[str] = mapped_column(Text)
+    title: Mapped[str] = mapped_column(Text, default="")
     lens: Mapped[str] = mapped_column(String(32), index=True)
     verticals: Mapped[list[Any]] = mapped_column(JSONType, default=list)
     coverage: Mapped[str] = mapped_column(String(32), default="unknown")
@@ -197,6 +199,7 @@ class AgentCallRow(Base):
     dropped_count: Mapped[int | None] = mapped_column(Integer)
     input_text: Mapped[str] = mapped_column(Text, default="")
     output_text: Mapped[str] = mapped_column(Text, default="")
+    retry_of: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

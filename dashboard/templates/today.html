@@ -6,41 +6,33 @@
 <section class="empty">
   <p class="kicker">No digest yet</p>
   <h1>The swarm has not written today.</h1>
-  <p>Trigger a run from <a href="/controls">Controls</a>. If every source is dark, the run fails instead of inventing headlines.</p>
+  <p>Without an Anthropic key it still produces a grounded digest from live sources (or a seeded fallback if they are dark).</p>
+  {% include "partials/run_control.html" %}
 </section>
 {% else %}
 
 <section class="lede">
-  <p class="kicker">{{ digest.date }}{% if digest.degraded %} · degraded{% endif %}</p>
-  {% if run %}
-  <p class="run-line">Run #{{ run.id }} · {{ fmt_stamp(run.started_at) }} · {{ fmt_duration(run.started_at, run.finished_at) }} · ${{ "%.2f"|format(run.cost_usd or 0) }} · {{ run.status }}</p>
-  {% endif %}
-  <p class="hint">{{ steering }}</p>
-  {% if read_line %}
-  <p class="meta-row">Read this run: {{ read_line }}</p>
-  {% endif %}
-  {% if ran_verticals or ran_lenses %}
-  <p class="meta-row">Verticals: {{ ran_verticals | join(", ") or "—" }} · Lenses: {{ ran_lenses | join(", ") or "—" }}</p>
-  {% endif %}
+  <p class="kicker">{{ run_banner or digest.date }}{% if digest.date %} · {{ digest.date }}{% endif %}{% if digest.degraded %} · degraded{% endif %}</p>
   <p class="last-run {% if digest_stale %}stale{% endif %}">
     {{ last_run_label }}
     {% if digest_stale %}
-    · <strong>stale</strong> (older than {{ stale_after_days }} days). Trigger a run from
-    <a href="/controls">Controls</a>.
+    · <strong>stale</strong> (older than {{ stale_after_days }} days).
     {% endif %}
   </p>
+  {% include "partials/run_control.html" %}
+  <p class="hint taste-steering">{{ taste_steering }}</p>
+  <p class="meta-row model-written">{{ model_written_line }}</p>
+  <p class="meta-row sources-read">{{ sources_read_line }}</p>
+  {% if sources_linked_line is defined %}
+  <p class="meta-row sources-linked">{{ sources_linked_line }}</p>
+  {% endif %}
+  {% if sources_linked_warn %}
+  <p class="warns">{{ sources_linked_warn }}</p>
+  {% endif %}
   <h1>{{ digest.title }}</h1>
-  <p class="meta-row">
-    {{ digest.curated_count }} curated
-    · {{ digest.killed_count }} killed
-    · {{ duplicate_count }} lexical duplicates
-    · {{ digest.rejected_intersection_count }} intersections passed over
-    <a class="dl" href="/digest/run/{{ digest.run_id }}.md">Download .md</a>
-  </p>
-  <p class="hint">Lexical duplicate count is token overlap only. It does not catch paraphrase, and a low number is not evidence that dedup worked.</p>
-  {% if digest.warnings %}
+  {% if page_warnings %}
   <ul class="warns">
-    {% for w in digest.warnings %}<li>{{ w }}</li>{% endfor %}
+    {% for w in page_warnings %}<li>{{ w }}</li>{% endfor %}
   </ul>
   {% endif %}
 </section>
@@ -55,17 +47,48 @@
   {% endfor %}
 </section>
 
+{% if saved %}
+<section>
+  <h2>Saved for ideation</h2>
+  <p class="hint"><a href="/archive?saved=1">Open Archive’s Saved view</a></p>
+  <ul class="saved-list">
+    {% for q in saved %}
+    <li>{{ q.title or q.text }}</li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+{% if near_miss %}
+<section class="near-miss">
+  <h2>Near-miss review</h2>
+  <p class="hint">These pairs survived lexical dedup. Flag any that mean the same thing in different words — that flag is the re-trigger, not three quiet weeks.</p>
+  <ol class="near-miss-list">
+    {% for pair in near_miss %}
+    <li>
+      <p class="near-miss-meta">{{ pair.share_kind }}
+        · {{ pair.shared_verticals | join(" × ") or "no shared vertical" }}</p>
+      <p><strong>Today.</strong> {{ pair.today_text }}</p>
+      <p><strong>Prior day.</strong> {{ pair.prior_text }}</p>
+      <p class="muted">Same question in different words? If yes, flag it.</p>
+    </li>
+    {% endfor %}
+  </ol>
+</section>
+{% endif %}
+
 <section>
   <h2>Intersections of the day</h2>
   {% if not accepted %}
-  <p class="muted">Nothing accepted. The interesting work may be in what was passed over.</p>
+  <p class="muted">{{ pairing_reason or "No topic pairings this run." }}</p>
   {% endif %}
   <ul class="inter-list">
     {% for i in accepted %}
     <li>
       <span class="verts">{{ i.verticals | join(" × ") }}</span>
-      <span class="cov cov-{{ i.coverage }}">coverage (model guess) {{ i.coverage }}</span>
+      <span class="cov cov-{{ i.coverage }}">coverage {{ i.coverage }} (model guess)</span>
       <span class="surprise">surprise {{ "%.2f"|format(i.surprise) }}</span>
+      {% if i.written_by == "template" %}<span class="pill template">template</span>{% endif %}
       <p>{{ i.thesis }}</p>
     </li>
     {% endfor %}
@@ -74,98 +97,136 @@
 
 <section>
   <h2>Question bank</h2>
-  <div class="chips" data-chip-scope="bank">
-    <button type="button" class="chip on" data-vert="">All</button>
-    {% for v in verticals %}
-    <button type="button" class="chip" data-vert="{{ v.id }}">{{ v.name }}</button>
-    {% endfor %}
-  </div>
+  <p class="hint bank-dedup">Lexical duplicate count is token overlap only. It does not catch paraphrase, and a low number is not evidence that dedup worked.</p>
   {% if not bank %}
   <p class="muted">The top five is the whole bank today.</p>
-  {% endif %}
-  {% for group in bank_groups %}
-  <div class="bank-group" data-vert="{{ group.id }}">
-    <h3>{{ group.name }}</h3>
-    {% for q in group.questions %}
+  {% else %}
+  <div class="bank-filters">
+    <button type="button" data-bank-filter="all" class="on">All</button>
+    {% for vid, name, qs in bank_by_vertical %}
+    <button type="button" data-bank-filter="{{ vid }}">{{ name }}</button>
+    {% endfor %}
+  </div>
+  <div id="bank-all">
+    {% for q in bank %}
+      {% include "partials/question.html" %}
+    {% endfor %}
+  </div>
+  {% for vid, name, qs in bank_by_vertical %}
+  <div class="bank-pane" data-bank-pane="{{ vid }}" hidden>
+    <h3 class="bank-vert">{{ name }}</h3>
+    {% for q in qs %}
       {% include "partials/question.html" %}
     {% endfor %}
   </div>
   {% endfor %}
+  {% endif %}
 </section>
 
-<section>
-  <details>
-    <summary>What we read</summary>
-    {% for vertical, items in briefs_by_vertical.items() %}
-    <h3>{{ vertical }}</h3>
-    {% for b in items %}
-    <p>
-      <strong>{{ b.headline }}</strong>
-      {% if b.why_now %} — {{ b.why_now }}{% endif %}
-      {% for u in (b.sources or []) %}
-        {% if u %}<a href="{{ u }}">link</a>{% endif %}
-      {% endfor %}
-    </p>
-    {% endfor %}
-    {% else %}
+<details class="behind">
+  <summary>Behind the scenes</summary>
+
+  <section class="read">
+    <h2>What we read</h2>
+    {% if not briefs %}
     <p class="muted">No briefs stored for this run.</p>
-    {% endfor %}
-  </details>
-</section>
+    {% else %}
+    <ul class="read-list">
+      {% for b in briefs %}
+      <li>
+        <span class="verts">{{ b.vertical }}</span>
+        {{ b.headline }}
+        {% if b.sources %}
+        <em>{% for u in b.sources[:3] %}<a href="{{ u }}">{{ url_domains.get(u) or u }}</a>{% if not loop.last %} · {% endif %}{% endfor %}</em>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </section>
 
-<section>
-  <h2>Cross-pollinator passed over</h2>
-  <p class="hint">If the interesting pairings are dying here, the curator’s kill floor will not show you.</p>
-  {% if not rejected %}
-  <p class="muted">No rejects were logged — that is a bug, not a compliment.</p>
-  {% endif %}
-  <ul class="kill-list">
-    {% for i in rejected %}
-    <li>
-      <span class="verts">{{ i.verticals | join(" × ") }}</span>
-      {{ i.thesis }}
-      <em>rejected: {{ i.reject_reason or "no reason" }}</em>
-    </li>
-    {% endfor %}
-  </ul>
-</section>
+  <section class="seen">
+    <h2>Today’s fetch vs what the scout saw</h2>
+    <p class="hint">Fetched is every stored signal. Scout saw is 18 slots per vertical, ranked within source then filled round-robin. A source that never occupies a slot did not reach the writer.</p>
+    <p class="meta-row">
+      Fetched
+      {% if fetch_counts %}
+      · {% for src, n in fetch_counts %}{{ src }} {{ n }}{% if not loop.last %} · {% endif %}{% endfor %}
+      {% else %}
+      · nothing stored
+      {% endif %}
+    </p>
+    {% if scout_seen %}
+    <ul class="stats">
+      {% for row in scout_seen %}
+      <li>
+        Scout · <strong>{{ row.name }}</strong> {{ row.n }} slots
+        {% if row.counts %}
+        — {% for src, n in row.counts %}{{ src }} {{ n }}{% if not loop.last %} · {% endif %}{% endfor %}
+        {% else %}
+        — empty
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </section>
 
-<section class="near-miss">
-  <h2>Near-miss review</h2>
-  <p class="hint">These pairs survived lexical dedup. Flag any that mean the same thing in different words — that flag is the re-trigger, not three quiet weeks.</p>
-  {% if not has_prior_day %}
-  <p class="muted">No prior digest. This section starts the next keyed day.</p>
-  {% elif not near_miss %}
-  <p class="muted">Prior digest has no surviving questions to pair.</p>
-  {% else %}
-  <ol class="near-miss-list">
-    {% for pair in near_miss %}
-    <li>
-      <p class="near-miss-meta">lexical overlap {{ "%.2f"|format(pair.score) }}
-        · {{ pair.shared_verticals | join(" × ") or "no shared vertical" }}</p>
-      <p><strong>Today.</strong> {{ pair.today_text }}</p>
-      <p><strong>Prior day.</strong> {{ pair.prior_text }}</p>
-      <p class="muted">Same question in different words? If yes, flag it.</p>
-    </li>
-    {% endfor %}
-  </ol>
-  {% endif %}
-</section>
+  <section>
+    <h2>Cross-pollinator passed over</h2>
+    <p class="hint">If the interesting pairings are dying here, the curator’s kill floor will not show you.</p>
+    {% if not rejected %}
+    <p class="muted">No rejects were logged — that is a bug, not a compliment.</p>
+    {% endif %}
+    <ul class="kill-list">
+      {% for i in rejected %}
+      <li>
+        <span class="verts">{{ i.verticals | join(" × ") }}</span>
+        {{ i.thesis }}
+        <em>rejected: {{ i.reject_reason or "no reason" }}</em>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
 
-<section>
-  <h2>Curator’s kill floor</h2>
-  {% if not killed %}
-  <p class="muted">No killed questions with reasons.</p>
+  <section>
+    <h2>Curator’s kill floor</h2>
+    {% if not killed %}
+    <p class="muted">No killed questions with reasons.</p>
+    {% endif %}
+    <ul class="kill-list">
+      {% for q in killed %}
+      <li>
+        {{ q.text }}
+        <em>killed: {{ q.kill_reason }}</em>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  {% if not near_miss %}
+  <section class="near-miss">
+    <h2>Near-miss review</h2>
+    <p class="muted">No close pairs today</p>
+  </section>
   {% endif %}
-  <ul class="kill-list">
-    {% for q in killed %}
-    <li>
-      {{ q.text }}
-      <em>killed: {{ q.kill_reason }}</em>
-    </li>
-    {% endfor %}
-  </ul>
-</section>
+
+  <section>
+    <h2>Debug</h2>
+    {% if debug_lines %}
+    <ul class="stats">
+      {% for line in debug_lines %}<li>{{ line }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+    <p class="meta-row">
+      {{ digest.curated_count }} curated
+      · {{ digest.killed_count }} killed
+      · {{ duplicate_count }} lexical duplicates
+      · {{ digest.rejected_intersection_count }} intersections passed over
+      <a class="dl" href="/digest/run/{{ digest.run_id }}.md">Download .md</a>
+    </p>
+  </section>
+</details>
 
 {% endif %}
 {% endblock %}

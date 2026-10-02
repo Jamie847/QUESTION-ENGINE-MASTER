@@ -129,7 +129,9 @@ def _migrate_wo006(engine: Engine) -> None:
     specs: list[tuple[str, str, str]] = [
         ("questions", "provenance", "VARCHAR(32)"),
         ("questions", "written_by", "VARCHAR(128)"),
+        ("questions", "title", "TEXT"),
         ("questions", "promoted_at", "TIMESTAMP"),
+        ("runs", "git_commit", "VARCHAR(64)"),
         ("briefs", "written_by", "VARCHAR(128)"),
         ("intersections", "written_by", "VARCHAR(128)"),
         ("runs", "curated_by", "VARCHAR(128)"),
@@ -156,6 +158,7 @@ def _migrate_wo008(engine: Engine) -> None:
         ("agent_calls", "stop_reason", "VARCHAR(64)"),
         ("agent_calls", "parsed_count", "INTEGER"),
         ("agent_calls", "dropped_count", "INTEGER"),
+        ("agent_calls", "retry_of", "INTEGER"),
     ]
     with engine.begin() as conn:
         for table, column, ddl in specs:

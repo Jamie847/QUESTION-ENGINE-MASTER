@@ -3,9 +3,9 @@
 {% block body %}
 <section class="lede">
   <p class="kicker">Archive</p>
-  <h1>{% if saved == '1' %}Saved for ideation{% else %}Every question the curator let live.{% endif %}</h1>
+  <h1>{% if saved %}Saved — ideation not built yet.{% else %}Every question the curator let live.{% endif %}</h1>
   <p class="meta-row">
-    {% if saved == '1' %}
+    {% if saved %}
     <a href="/archive">Back to curated</a>
     {% else %}
     <a href="/archive?saved=1">Saved for ideation</a>

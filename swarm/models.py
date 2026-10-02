@@ -113,6 +113,7 @@ class Intersection(BaseModel):
 class Question(BaseModel):
     id: str
     text: str
+    title: str = ""
     lens: str
     verticals: list[str] = Field(default_factory=list)
     coverage: Coverage = Coverage.unknown

@@ -43,6 +43,7 @@ SCHEMA = {
                 "properties": {
                     "id": {"type": "string"},
                     "text": {"type": "string"},
+                    "title": {"type": "string"},
                     "rank": {"type": "integer"},
                     "decay_class": {
                         "type": "string",
@@ -50,7 +51,7 @@ SCHEMA = {
                     },
                     "keep_reason": {"type": "string"},
                 },
-                "required": ["id", "rank", "decay_class"],
+                "required": ["id", "rank", "decay_class", "title"],
             },
         },
         "killed": {
@@ -140,6 +141,7 @@ def _llm(
             continue
         q.status = QuestionStatus.curated
         q.rank = int(raw.get("rank") or 99)
+        q.title = clip_title(raw.get("title") or "") or title_from_question(q.text)
         try:
             q.decay_class = DecayClass(raw.get("decay_class") or "slow")
         except ValueError:
@@ -168,6 +170,7 @@ def _fallback(candidates: list[Question], taste: TasteProfile) -> list[Question]
         else:
             q.status = QuestionStatus.curated
             q.kill_reason = ""
+            q.title = clip_title(q.title) or title_from_question(q.text)
         scored.append((score, q))
     curated = [q for s, q in scored if q.status == QuestionStatus.curated]
     curated.sort(key=lambda q: _score(q, taste)[0], reverse=True)
@@ -220,3 +223,29 @@ def _score(q: Question, taste: TasteProfile) -> tuple[float, str]:
     if q.coverage == Coverage.crowded:
         score -= 0.04
     return min(score, 0.95), "kept"
+
+
+_LEAD = re.compile(
+    r"^(what if|what|who|whom|whose|which|where|when|why|how|if|does|do|"
+    r"is|are|can|could|would|will)\b[\s,:—-]*",
+    re.I,
+)
+
+
+def clip_title(text: str) -> str:
+    words = [w for w in (text or "").split() if w]
+    return " ".join(words[:10]).rstrip(".,;:?")
+
+
+def title_from_question(text: str) -> str:
+    """Name the thing. Used only for questions the curator keeps this run."""
+    blob = " ".join((text or "").split()).rstrip("?")
+    for _ in range(3):
+        nxt = _LEAD.sub("", blob, count=1).strip(" ,:—-")
+        if nxt == blob:
+            break
+        blob = nxt
+    title = clip_title(blob)
+    if not title:
+        return ""
+    return title[0].upper() + title[1:]

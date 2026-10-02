@@ -36,7 +36,11 @@ SCHEMA = {
                     },
                     "context": {"type": "string"},
                     "intersection_ref": {"type": "string"},
-                    "brief_refs": {"type": "array", "items": {"type": "string"}},
+                    "brief_refs": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "minItems": 1,
+                    },
                 },
                 "required": [
                     "text",
@@ -186,16 +190,22 @@ def format_smith_block(briefs: list[Brief], intersections: list[Intersection]) -
             f"  why now: {brief.why_now}\n"
             f"  who is affected: {brief.who_is_affected}"
         )
-    bits.append("INTERSECTIONS:")
-    for i, inter in enumerate(intersections, start=1):
+    if intersections:
+        bits.append("INTERSECTIONS:")
+        for i, inter in enumerate(intersections, start=1):
+            bits.append(
+                f"- I{i} {' × '.join(inter.verticals)} "
+                f"({inter.coverage.value} coverage, surprise={inter.surprise:.2f}): {inter.thesis}"
+            )
         bits.append(
-            f"- I{i} {' × '.join(inter.verticals)} "
-            f"({inter.coverage.value} coverage, surprise={inter.surprise:.2f}): {inter.thesis}"
+            "Cite intersection_ref as one of I1… or none. Cite brief_refs as B1…. "
+            "Do not invent labels."
         )
-    bits.append(
-        "Cite intersection_ref as one of I1… or none. Cite brief_refs as B1…. "
-        "Do not invent labels."
-    )
+    else:
+        bits.append(
+            "No pairings are available this run. Write from the briefs alone. "
+            "Set intersection_ref to none."
+        )
     return "\n".join(bits)
 
 
@@ -299,21 +309,27 @@ def _from_payload(
         parsed += 1
         try:
             text = raw["text"]
-            ref = str(raw.get("intersection_ref") or "").strip()
-            inter = label_i.get(ref)
-            if inter is None:
+            ref = str(raw.get("intersection_ref") or "").strip().upper()
+            inter = None if ref in {"", "NONE"} else label_i.get(ref)
+            brief_ids = []
+            for token in raw.get("brief_refs") or []:
+                brief = label_b.get(str(token).strip().upper())
+                if brief and brief.id not in brief_ids:
+                    brief_ids.append(brief.id)
+            if inter is None and not brief_ids:
                 intersection_id = None
-                brief_ids: list[str] = []
                 provenance = "unlinked"
+                verticals = raw.get("verticals") or []
+                coverage = Coverage(raw.get("coverage") or "unknown")
+            elif inter is None:
+                intersection_id = None
+                provenance = "linked"
                 verticals = raw.get("verticals") or []
                 coverage = Coverage(raw.get("coverage") or "unknown")
             else:
                 intersection_id = inter.id
-                brief_ids = []
-                for token in raw.get("brief_refs") or []:
-                    brief = label_b.get(str(token).strip())
-                    if brief and brief.id not in brief_ids:
-                        brief_ids.append(brief.id)
+                if not brief_ids:
+                    brief_ids = list(inter.brief_ids or [])
                 provenance = "linked"
                 verticals = raw.get("verticals") or inter.verticals
                 coverage = Coverage(raw.get("coverage") or inter.coverage.value)
