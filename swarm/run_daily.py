@@ -21,7 +21,7 @@ from swarm.dedup import mark_duplicates
 from swarm.display_time import digest_local_date
 from swarm.freshness import freshness_window_days
 from swarm.llm import LLM
-from swarm.lock import LockBusy, acquire_lock, release_lock
+from swarm.lock import LockBusy, acquire_lock, fail_unlocked_running_runs, release_lock
 from swarm.models import (
     Brief,
     Intersection,
@@ -87,6 +87,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Re-resolve brief URLs from stored scout calls (WO-011). Does not start a run.",
     )
+    parser.add_argument(
+        "--close-orphans",
+        action="store_true",
+        help="Mark running rows that do not hold the daily lock as failed. Does not start a run.",
+    )
     args = parser.parse_args(argv)
 
     init_db()
@@ -102,6 +107,11 @@ def main(argv: list[str] | None = None) -> int:
             f"unlinked={counts['unlinked']} "
             f"skipped={counts.get('skipped', 0)}"
         )
+        if not args.close_orphans:
+            return 0
+    if args.close_orphans:
+        closed = fail_unlocked_running_runs()
+        print(f"CLOSE_ORPHANS closed={closed}")
         return 0
     if args.healthcheck:
         from swarm.db import ping_db
@@ -132,6 +142,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.force:
             release_lock()
         acquire_lock(run_id)
+        fail_unlocked_running_runs(keep_id=run_id)
     except LockBusy as exc:
         log.error("%s", exc)
         if created:

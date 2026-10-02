@@ -326,7 +326,7 @@ def run_one_opportunity(
     return {
         "status": "completed",
         "claims": verdicts,
-        "whats_actually_true": cleaned.get("whats_actually_true") or "",
+        "whats_actually_true": cleaned.get("whats_actually_true") or "not available",
         "shapes": shapes,
         "picked_shape": picked,
         "who_has_problem": cleaned.get("who_has_problem") or "",

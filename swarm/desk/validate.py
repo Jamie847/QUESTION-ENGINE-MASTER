@@ -71,7 +71,7 @@ def apply_number_rule(
         for num in missing:
             cleaned = cleaned.replace(num, "")
         cleaned = re.sub(r"\s{2,}", " ", cleaned).strip(" ,;.")
-        out[key] = cleaned
+        out[key] = cleaned if cleaned else "not available"
     return out, dirty
 
 

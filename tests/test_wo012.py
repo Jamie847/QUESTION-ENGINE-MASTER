@@ -19,6 +19,7 @@ from swarm.desk.validate import (
 )
 from swarm.desk.verdicts import apply_verdict, verdict_history
 from swarm.llm import LLM
+from swarm.lock import release_lock
 from swarm.orm import OpportunityRow, OpportunityVerdictRow, QuestionRow, RunRow
 from swarm.agents.desk import CHECK_NOTE, run_desk, run_one_opportunity
 from swarm.settings import get_settings
@@ -163,6 +164,16 @@ def test_unsourced_number_is_rejected_then_not_available():
     cleaned2, dirty2 = apply_number_rule(second, evidence, second_pass=True)
     assert dirty2 is True
     assert cleaned2["who_has_problem"] == "not available"
+
+
+def test_number_rule_does_not_leave_a_blank_field():
+    """Stripping every number from a short field must not wipe What's actually true."""
+    cleaned, dirty = apply_number_rule(
+        {"whats_actually_true": "2026"},
+        evidence="no digits in the snippets",
+    )
+    assert dirty is True
+    assert cleaned["whats_actually_true"] == "not available"
 
 
 def test_no_rivals_is_phrased_as_a_search():
@@ -318,3 +329,24 @@ def test_assay_this_stops_at_daily_ceiling(monkeypatch):
     res = client.post("/api/questions/q-assay-ceil/assay")
     assert res.status_code == 429
     assert "ASSAYS_PER_DAY" in res.text
+
+
+def test_status_ignores_a_running_row_without_the_lock():
+    """Run 24 was killed mid-scout. The banner must not stay on forever."""
+    init_db()
+    release_lock()
+    with session_scope() as session:
+        session.query(RunRow).filter(RunRow.id == 925).delete()
+        session.add(RunRow(id=925, status="running", current_stage="scout"))
+    client = TestClient(app)
+    res = client.get("/api/status")
+    assert res.status_code == 200
+    assert res.json()["running"] is False
+    page = client.get("/")
+    assert "Swarm is running" not in page.text
+    with session_scope() as session:
+        leftover = session.get(RunRow, 925)
+        if leftover is not None:
+            leftover.status = "failed"
+            leftover.error = "test cleanup"
+            leftover.finished_at = datetime.now(timezone.utc)

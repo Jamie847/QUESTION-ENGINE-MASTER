@@ -28,4 +28,4 @@ Repair from WO-011 is unchanged: one-shot preDeploy, marker `wo011_link_repair`.
 
 ## Acceptance
 
-Needs a keyed production run on the merged commit. Pass: up to 3 cards (plus any saves), each with claim verdicts and links. CP reads the live page. Operator marks at least one verdict.
+Run **25** on `d7c64ed`. Three cards, each with claim verdicts and links. Desk **$1.50** ($0.49–$0.51 each). No contradicted claim; several partly supported with corrections. Operator still marks a verdict and writes the assets profile. Details: `docs/CC-ACCEPT-WO-012.md`.
