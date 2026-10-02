@@ -122,16 +122,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.close_orphans:
         closed = fail_unlocked_running_runs()
         print(f"CLOSE_ORPHANS closed={closed}")
-        if not (args.backfill_memory or args.rebuild_memory):
-            return 0
     if args.rebuild_memory:
         from swarm.memory.store import rebuild_memory
 
         counts = rebuild_memory()
         print(f"REBUILD_MEMORY embedded={counts.get('embedded', 0)} ok={int(bool(counts.get('ok')))}")
-        if not args.backfill_memory:
+        if not (args.backfill_memory or args.close_orphans):
             return 0 if counts.get("ok") else 1
-    if args.backfill_memory:
+    if args.backfill_memory or args.close_orphans:
         from swarm.memory.backfill import backfill_memory
 
         counts = backfill_memory()
@@ -141,8 +139,8 @@ def main(argv: list[str] | None = None) -> int:
             f"skipped={counts.get('skipped', 0)} "
             f"ok={counts.get('ok', 0)}"
         )
-        # Missing Voyage must not fail a deploy. The marker is only
-        # recorded on success, so the next deploy retries.
+        # Live web preDeploy is still --repair-links --close-orphans until
+        # the Blueprint syncs. Missing Voyage must not fail a deploy.
         return 0
     if args.healthcheck:
         from swarm.db import ping_db
