@@ -16,7 +16,7 @@ from sqlalchemy import func, select
 from swarm.config import lenses, verticals
 from swarm.db import init_db, ping_db, session_scope
 from swarm.dedup import sample_near_miss_pairs
-from swarm.lock import current_lock
+from swarm.lock import current_lock, locked_run_id
 from swarm.publish_gate import gate_reasons, publish_gate_open
 from swarm.staleness import digest_age_days, is_stale, last_run_label
 from swarm.models import Coverage, DecayClass, Question, QuestionStatus
@@ -182,12 +182,11 @@ def _latest_digest() -> DigestRow | None:
 
 
 def _active_run() -> RunRow | None:
+    run_id = locked_run_id()
+    if run_id is None:
+        return None
     with session_scope() as session:
-        row = session.scalar(
-            select(RunRow)
-            .where(RunRow.status == "running")
-            .order_by(RunRow.started_at.desc())
-        )
+        row = session.get(RunRow, run_id)
         if row:
             session.expunge(row)
         return row
