@@ -54,6 +54,20 @@
 </section>
 
 <section>
+  <h2>Your assets</h2>
+  <p class="hint">The desk reads this for Fit only. The system never writes or suggests these lines. Empty fields stay empty.</p>
+  <form id="assets-form" class="assets">
+    {% for key, label in asset_headings %}
+    <label>{{ label }}
+      <textarea name="{{ key }}" rows="3" maxlength="4000">{{ assets.get(key, "") }}</textarea>
+    </label>
+    {% endfor %}
+    <button type="submit" class="text-btn">Save assets</button>
+    <p class="muted" data-assets-msg></p>
+  </form>
+</section>
+
+<section>
   <h2>Your ratings</h2>
   {% if not rated %}
   <p class="muted">No stars yet. Rate today’s questions — that is the signal, even after the fact.</p>

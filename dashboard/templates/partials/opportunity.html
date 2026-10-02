@@ -1,0 +1,82 @@
+<article class="opp" data-oid="{{ opp.id }}" id="opp-{{ opp.id }}">
+  {% if opp.status == "could_not_check" %}
+  <p class="kicker">could not check</p>
+  {% endif %}
+  <h3>{{ opp.question_title or opp.who_has_problem or "Opportunity" }}</h3>
+  <p class="hint">{{ opp.check_note }}</p>
+  <p><a href="/?q={{ opp.question_id }}#{{ opp.question_id }}">Question</a>
+     · run {{ opp.run_id }}
+     {% if opp.cost_usd %}<span class="muted"> · ${{ '%.2f'|format(opp.cost_usd) }}</span>{% endif %}
+  </p>
+
+  {% if opp.claims %}
+  <h4>Claim verdicts</h4>
+  <ul class="claim-list">
+    {% for c in opp.claims %}
+    <li>
+      <strong>{{ c.verdict or "unverified" }}</strong> — {{ c.claim }}
+      {% if c.correction %}<em>Corrected: {{ c.correction }}</em>{% endif %}
+      {% if c.links %}
+      <span class="muted">{% for u in c.links %}<a href="{{ u }}">source</a>{% if not loop.last %} · {% endif %}{% endfor %}</span>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  {% if opp.status != "could_not_check" %}
+  <p><strong>What's actually true.</strong> {{ opp.whats_actually_true }}</p>
+  {% if opp.shapes %}
+  <p><strong>Shape.</strong>
+    {% for s in opp.shapes %}
+      {% if s.picked %}<strong>{{ s.kind }}</strong> — {{ s.line }}{% else %}<span class="muted">{{ s.kind }}: {{ s.line }}</span>{% endif %}
+      {% if not loop.last %}<br>{% endif %}
+    {% endfor %}
+  </p>
+  {% endif %}
+  <dl class="opp-fields">
+    <div><dt>Who has the problem</dt><dd>{{ opp.who_has_problem }}</dd></div>
+    <div><dt>Who pays</dt><dd>{{ opp.who_pays }}</dd></div>
+    <div><dt>What they use or pay for today</dt><dd>{{ opp.what_they_use_today }}</dd></div>
+    <div><dt>Why now</dt><dd>{{ opp.why_now }}</dd></div>
+    <div><dt>How it charges</dt><dd>{{ opp.how_it_charges }}</dd></div>
+    <div><dt>Rivals found</dt><dd>{{ opp.rivals }}</dd></div>
+    <div><dt>First prospects</dt>
+      <dd>{% if opp.first_prospects %}{{ opp.first_prospects | join(", ") }}{% else %}none named in the snippets{% endif %}</dd>
+    </div>
+    <div><dt>Fit</dt><dd>{{ opp.fit }}</dd></div>
+    <div><dt>Weekend test</dt><dd>{{ opp.weekend_test }}</dd></div>
+    <div><dt>Why it might fail</dt><dd>{{ opp.why_it_might_fail }}</dd></div>
+    <div><dt>Red flags</dt>
+      <dd>{% if opp.red_flags %}{{ opp.red_flags | join("; ") }}{% else %}none listed{% endif %}</dd>
+    </div>
+  </dl>
+  {% endif %}
+
+  <div class="opp-verdict">
+    <p class="meta-row">
+      {% if opp.latest_verdict %}
+      Last verdict: <strong>{{ opp.latest_verdict }}</strong>
+      {% if opp.latest_verdict_why %} — {{ opp.latest_verdict_why }}{% endif %}
+      {% else %}
+      No verdict yet.
+      {% endif %}
+    </p>
+    <div class="verdict-actions">
+      <button type="button" class="text-btn verdict" data-oid="{{ opp.id }}" data-verdict="pursue">Pursue</button>
+      <button type="button" class="text-btn verdict" data-oid="{{ opp.id }}" data-verdict="park">Park</button>
+      <button type="button" class="text-btn verdict" data-oid="{{ opp.id }}" data-verdict="kill">Kill</button>
+      <input class="why verdict-why" type="text" maxlength="200" placeholder="one-line why (Pursue and Kill)" aria-label="why">
+    </div>
+    {% if opp.verdict_history %}
+    <details>
+      <summary>Verdict history</summary>
+      <ul class="stats">
+        {% for h in opp.verdict_history %}
+        <li>{{ h.verdict }}{% if h.why %} — {{ h.why }}{% endif %}</li>
+        {% endfor %}
+      </ul>
+    </details>
+    {% endif %}
+  </div>
+</article>

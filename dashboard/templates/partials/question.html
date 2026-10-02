@@ -46,5 +46,8 @@
     <button type="button" class="text-btn promote" data-qid="{{ q.id }}" {% if q.promoted %}disabled{% endif %}>
       {% if q.promoted %}Saved{% else %}Save for ideation{% endif %}
     </button>
+    <button type="button" class="text-btn assay" data-qid="{{ q.id }}">
+      Assay this · ~${{ '%.2f'|format(assay_estimate) }}
+    </button>
   </div>
 </article>

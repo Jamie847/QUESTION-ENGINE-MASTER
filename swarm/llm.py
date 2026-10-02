@@ -140,6 +140,7 @@ AGENT_STAGE = {
     "cross_pollinator": "Topic pairing",
     "smiths": "Writing questions",
     "curator": "Judging",
+    "desk": "Opportunity desk",
 }
 
 

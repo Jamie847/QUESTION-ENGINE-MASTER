@@ -21,6 +21,7 @@ STAGE_WORDS = {
     "smith": "writing questions",
     "dedup": "writing questions",
     "curate": "judging",
+    "desk": "checking opportunities",
     "archive": "done",
 }
 

@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Opportunities — Question Engine{% endblock %}
+{% block body %}
+<section class="lede">
+  <p class="kicker">Opportunity desk</p>
+  <h1>Checked money ideas, newest first.</h1>
+  <p>Each card started as a question. The desk checked the premise, then shaped a business on paper. You decide Pursue, Park, or Kill.</p>
+</section>
+
+<form class="filters" method="get" action="/opportunities">
+  <label>Verdict
+    <select name="verdict" onchange="this.form.submit()">
+      <option value="" {% if not verdict %}selected{% endif %}>All</option>
+      <option value="pursue" {% if verdict == 'pursue' %}selected{% endif %}>Pursue</option>
+      <option value="park" {% if verdict == 'park' %}selected{% endif %}>Park</option>
+      <option value="kill" {% if verdict == 'kill' %}selected{% endif %}>Kill</option>
+      <option value="none" {% if verdict == 'none' %}selected{% endif %}>No verdict</option>
+    </select>
+  </label>
+</form>
+
+{% if not opportunities %}
+<section class="empty">
+  <p class="muted">No opportunity cards yet. Run the swarm, or Assay this on a question.</p>
+</section>
+{% endif %}
+
+{% for opp in opportunities %}
+  {% include "partials/opportunity.html" %}
+{% endfor %}
+{% endblock %}

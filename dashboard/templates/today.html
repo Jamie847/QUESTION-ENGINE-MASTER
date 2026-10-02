@@ -37,6 +37,22 @@
   {% endif %}
 </section>
 
+<section class="opps">
+  <h2>Opportunities from this run</h2>
+  {% if desk_skipped %}
+  <p class="warns">{{ desk_skipped }}</p>
+  {% endif %}
+  {% if not opportunities %}
+  <p class="muted">No checked money ideas this run. The questions below are how they get found.</p>
+  {% endif %}
+  {% for opp in opportunities %}
+    {% include "partials/opportunity.html" %}
+  {% endfor %}
+  {% if desk_line %}
+  <p class="meta-row">{{ desk_line }}</p>
+  {% endif %}
+</section>
+
 <section>
   <h2>Top questions</h2>
   {% if not top %}

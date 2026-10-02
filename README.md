@@ -28,7 +28,7 @@ The Correspondent reads stored digests only. Fill `content/voice.md` yourself �
 If the Anthropic key **is** set and every model call fails (a 400 is the usual culprit: Claude 5 adaptive thinking plus a forced `tool_choice`), the run **fails closed**. It will not archive a template digest and pretend Fable wrote it. Cron logs will include the API error body.
 
 - `ANTHROPIC_MODEL` (default `claude-sonnet-5`) — scouts and smiths
-- `JUDGMENT_MODEL` (default `claude-fable-5`) — cross-pollinator and curator
+- `JUDGMENT_MODEL` (default `claude-fable-5`) — cross-pollinator, curator, and the opportunity desk
 - `ANTHROPIC_WORKSPACE_ID` — required if the key is identity-linked / multi-workspace (`wrkspc_…`). A key scoped to one workspace does not need it.
 - Dedup is **lexical** (no Voyage, no pgvector). `/healthz` reports `pgvector_installed: false` on purpose. See `docs/CP-RULING-dedup.md`.
 
@@ -42,15 +42,17 @@ The dashboard is open (`DASHBOARD_AUTH=off`). That is the intended posture (WO-0
 4. **Smiths** — one lens each.
 5. **Dedup** — lexical (content-token Jaccard) against the batch and the last 45 days. Does not catch paraphrase. The digest samples adjacent-day survivors so a person can flag a miss.
 6. **Curator** — taste seed (later: weekly compressed profile + rotating exemplars).
-7. **Archivist** — markdown digest written to the database.
+7. **Desk** — optional. Assays the top linked questions (and anything saved since the last run), checks the premise, and writes a Pursue/Park/Kill card. Skipped when the run budget is spent. Cited pages are not fetched; cards say so.
+8. **Archivist** — markdown digest written to the database.
 
 `--resume <run_id>` continues from the last finished stage. Runs are **manual only until the Operator rates the five existing digests** (CP 2026-09-08). After that the weekday cron is `0 10 * * 1-5`. Until then the Blueprint schedule stays 29 February (Render requires a schedule field). Both manual paths stay: Controls → Run swarm now (`POST /api/run`) and Render → cron → Trigger Run. A lock prevents overlap. Digests are unique per **run**, not per date — a second same-day click keeps the first digest. Today and the digest footer show how old the last run is.
 
 ## Dashboard
 
-- **Today** — digest, 1–5★ ratings, promote-to-ideation, coverage flags, rejects, kill floor.
+- **Today** — opportunities from this run, digest, 1–5★ ratings, Assay this, promote-to-ideation, coverage flags, rejects, kill floor.
+- **Opportunities** — every checked card, newest first, filterable by verdict.
 - **Archive** — search/filter the question bank; per-day `.md` download.
-- **Taste** — seeded keep/kill exemplars, your ratings, and a lexical-duplicate count that is labeled as token overlap only.
+- **Taste** — seeded keep/kill exemplars, the Operator's assets profile, your ratings, and a lexical-duplicate count that is labeled as token overlap only.
 - **Issues** — The Correspondent. Weekly essay draft from the week's best question. Never auto-published. `GET /issues/{date}.md`.
 - **Controls** — manual run, source health, verticals/lenses.
 

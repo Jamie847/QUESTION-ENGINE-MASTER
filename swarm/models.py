@@ -50,6 +50,7 @@ class StageName(str, Enum):
     smith = "smith"
     dedup = "dedup"
     curate = "curate"
+    desk = "desk"
     archive = "archive"
 
 

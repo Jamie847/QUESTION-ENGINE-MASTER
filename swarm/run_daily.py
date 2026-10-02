@@ -11,6 +11,7 @@ from sqlalchemy import select
 from swarm.agents.archivist import lens_label, render_digest, run_status_from
 from swarm.agents.cross_pollinator import run_cross_pollinator
 from swarm.agents.curator import run_curator
+from swarm.agents.desk import run_desk
 from swarm.agents.scout import run_scouts
 from swarm.agents.smiths import run_smiths
 from swarm.budget import RunBudget
@@ -60,6 +61,7 @@ STAGE_ORDER = [
     StageName.smith,
     StageName.dedup,
     StageName.curate,
+    StageName.desk,
     StageName.archive,
 ]
 
@@ -279,6 +281,20 @@ def _execute(run_id: int) -> None:
     else:
         questions = _load_questions(run_id)
 
+    if StageName.desk.value not in done:
+        _set_stage(run_id, StageName.desk)
+        llm.agent = "desk"
+        run_desk(
+            run_id=run_id,
+            questions=questions,
+            briefs=briefs,
+            llm=llm,
+            previous_started=_previous_run_started(run_id),
+            warnings=warnings,
+        )
+        _checkpoint(run_id, StageName.desk, warnings=warnings)
+        questions = _load_questions(run_id)
+
     if StageName.archive.value not in done:
         if llm.writer_failed():
             raise RuntimeError(
@@ -308,7 +324,7 @@ def _execute(run_id: int) -> None:
                 f"writer used Claude ({llm.successes} calls); "
                 f"volume={settings.anthropic_model}; "
                 f"judgment={settings.judgment_model} "
-                f"(cross-pollinator + curator)"
+                f"(cross-pollinator + curator + desk)"
             )
         prior_questions = _prior_curated_questions(run_id)
         started_at, _finished_prior = _run_times(run_id)
@@ -775,6 +791,14 @@ def _store_curated_by(run_id: int, curated_by: str) -> None:
         row = session.get(RunRow, run_id)
         if row:
             row.curated_by = curated_by
+
+
+def _previous_run_started(run_id: int) -> datetime | None:
+    with session_scope() as session:
+        row = session.scalar(
+            select(RunRow).where(RunRow.id < run_id).order_by(RunRow.id.desc())
+        )
+        return row.started_at if row else None
 
 
 def _run_times(run_id: int) -> tuple[datetime | None, datetime | None]:

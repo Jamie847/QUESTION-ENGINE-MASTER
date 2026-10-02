@@ -72,6 +72,10 @@ class Settings(BaseSettings):
     sam_gov_api_key: str = ""
     eia_api_key: str = ""
     fred_api_key: str = ""
+    opportunity_max: int = 5
+    assays_per_day: int = 10
+    desk_reserve_usd: float = 0.40
+    desk_cost_estimate_usd: float = 0.31
 
     @computed_field  # type: ignore[prop-decorator]
     @property

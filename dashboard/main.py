@@ -20,11 +20,15 @@ from swarm.lock import current_lock
 from swarm.publish_gate import gate_reasons, publish_gate_open
 from swarm.staleness import digest_age_days, is_stale, last_run_label
 from swarm.models import Coverage, DecayClass, Question, QuestionStatus
+from swarm.desk.assets import HEADINGS as ASSET_HEADINGS
+from swarm.desk.assets import load_assets, save_assets
+from swarm.desk.verdicts import apply_verdict, verdict_history
 from swarm.orm import (
     BriefRow,
     DigestRow,
     IntersectionRow,
     IssueRow,
+    OpportunityRow,
     QuestionRow,
     RatingRow,
     RunRow,
@@ -130,7 +134,9 @@ async def access_gate(request: Request, call_next):
 
     token = settings.auth_token
     provided = _provided_token(request)
-    spend = path in _SPEND_PATHS and request.method == "POST"
+    spend = request.method == "POST" and (
+        path in _SPEND_PATHS or path.endswith("/assay")
+    )
 
     if not token and not settings.allow_unauthenticated:
         return _unauthorized()
@@ -253,7 +259,69 @@ def _nav_ctx(request: Request, page: str) -> dict:
         "page": page,
         "active_run": _active_run(),
         "git_commit": get_settings().short_commit,
+        "assay_estimate": get_settings().desk_cost_estimate_usd,
     }
+
+
+def _opportunity_view(row: OpportunityRow) -> dict:
+    title = ""
+    with session_scope() as session:
+        q = session.get(QuestionRow, row.question_id)
+        if q:
+            title = q.title or q.text[:80]
+    return {
+        "id": row.id,
+        "run_id": row.run_id,
+        "question_id": row.question_id,
+        "question_title": title,
+        "status": row.status,
+        "claims": row.claims or [],
+        "whats_actually_true": row.whats_actually_true,
+        "shapes": row.shapes or [],
+        "picked_shape": row.picked_shape,
+        "who_has_problem": row.who_has_problem,
+        "who_pays": row.who_pays,
+        "what_they_use_today": row.what_they_use_today,
+        "why_now": row.why_now,
+        "how_it_charges": row.how_it_charges,
+        "rivals": row.rivals,
+        "first_prospects": row.first_prospects or [],
+        "fit": row.fit,
+        "weekend_test": row.weekend_test,
+        "why_it_might_fail": row.why_it_might_fail,
+        "red_flags": row.red_flags or [],
+        "check_note": row.check_note,
+        "cost_usd": row.cost_usd,
+        "written_by": row.written_by,
+        "latest_verdict": row.latest_verdict,
+        "latest_verdict_why": row.latest_verdict_why,
+        "verdict_history": verdict_history(row.id),
+    }
+
+
+def _desk_line(run_id: int | None, warnings: list[str] | None) -> tuple[str, str]:
+    skipped = ""
+    for raw in warnings or []:
+        text = str(raw)
+        if text.startswith("Opportunity desk skipped") or text.startswith(
+            "Opportunity desk stopped"
+        ):
+            skipped = text
+    if run_id is None:
+        return "", skipped
+    with session_scope() as session:
+        rows = list(
+            session.query(OpportunityRow)
+            .filter(OpportunityRow.run_id == run_id)
+            .order_by(OpportunityRow.created_at.desc())
+        )
+        for row in rows:
+            session.expunge(row)
+    if not rows:
+        return "", skipped
+    total = sum(float(r.cost_usd or 0) for r in rows)
+    line = f"Opportunity desk ${total:.2f} ({len(rows)} card{'s' if len(rows) != 1 else ''})"
+    return line, skipped
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -431,8 +499,31 @@ def today(request: Request):
             "sources_linked_warn": linked_warn,
             "banned_words_line": banned_words_line(questions, intersections),
             "pairing_reason": pairing_reason(page_warnings + debug_lines),
+            "opportunities": _run_opportunities(digest.run_id if digest else None),
+            "desk_line": _desk_line(
+                digest.run_id if digest else None,
+                digest.warnings if digest else None,
+            )[0],
+            "desk_skipped": _desk_line(
+                digest.run_id if digest else None,
+                digest.warnings if digest else None,
+            )[1],
         },
     )
+
+
+def _run_opportunities(run_id: int | None) -> list[dict]:
+    if run_id is None:
+        return []
+    with session_scope() as session:
+        rows = list(
+            session.query(OpportunityRow)
+            .filter(OpportunityRow.run_id == run_id)
+            .order_by(OpportunityRow.created_at.desc())
+        )
+        for row in rows:
+            session.expunge(row)
+    return [_opportunity_view(r) for r in rows]
 
 
 @app.get("/archive", response_class=HTMLResponse)
@@ -574,6 +665,31 @@ def taste_page(request: Request):
             "lexical_duplicate_count": dup_n,
             "curated_count": curated_n,
             "taste_steering": steering_label(taste_source),
+            "assets": load_assets(),
+            "asset_headings": ASSET_HEADINGS,
+        },
+    )
+
+
+@app.get("/opportunities", response_class=HTMLResponse)
+def opportunities_page(request: Request, verdict: str = ""):
+    with session_scope() as session:
+        stmt = select(OpportunityRow).order_by(OpportunityRow.created_at.desc())
+        rows = list(session.scalars(stmt))
+        for row in rows:
+            session.expunge(row)
+    wanted = (verdict or "").strip().lower()
+    if wanted == "none":
+        rows = [r for r in rows if not r.latest_verdict]
+    elif wanted in {"pursue", "park", "kill"}:
+        rows = [r for r in rows if r.latest_verdict == wanted]
+    return templates.TemplateResponse(
+        request,
+        "opportunities.html",
+        {
+            **_nav_ctx(request, "opportunities"),
+            "opportunities": [_opportunity_view(r) for r in rows],
+            "verdict": wanted,
         },
     )
 
@@ -784,6 +900,70 @@ def promote_question(question_id: str):
         "rank": rank,
         "promoted_at": when.isoformat() if when else None,
     }
+
+
+class VerdictIn(BaseModel):
+    verdict: str
+    why: str = ""
+
+
+class AssetsIn(BaseModel):
+    businesses: str = ""
+    reach: str = ""
+    skills: str = ""
+    capital_time: str = ""
+    wont_do: str = ""
+
+
+@app.post("/api/questions/{question_id}/assay")
+def assay_question(question_id: str):
+    from swarm.agents.desk import assays_today, run_desk
+    from swarm.budget import RunBudget
+    from swarm.llm import LLM
+
+    settings = get_settings()
+    if assays_today() >= settings.assays_per_day:
+        raise HTTPException(
+            429,
+            f"ASSAYS_PER_DAY exceeded: {assays_today()} assays today (cap {settings.assays_per_day})",
+        )
+    with session_scope() as session:
+        q = session.get(QuestionRow, question_id)
+        if not q:
+            raise HTTPException(404, "Unknown question")
+        session.expunge(q)
+        briefs = list(session.query(BriefRow).filter(BriefRow.run_id == q.run_id))
+        for brief in briefs:
+            session.expunge(brief)
+    llm = LLM(RunBudget(settings.run_budget_usd))
+    llm.run_id = q.run_id
+    llm.agent = "desk"
+    warnings: list[str] = []
+    cards = run_desk(
+        run_id=q.run_id,
+        questions=[q],
+        briefs=briefs,
+        llm=llm,
+        previous_started=None,
+        warnings=warnings,
+        on_demand=True,
+    )
+    if not cards:
+        raise HTTPException(409, warnings[-1] if warnings else "Desk wrote no card")
+    return {"ok": True, "opportunity_id": cards[0].get("id"), "warnings": warnings}
+
+
+@app.post("/api/opportunities/{opportunity_id}/verdict")
+def decide_opportunity(opportunity_id: str, body: VerdictIn):
+    try:
+        return apply_verdict(opportunity_id, body.verdict, body.why)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/api/assets")
+def update_assets(body: AssetsIn):
+    return {"ok": True, "assets": save_assets(body.model_dump())}
 
 
 @app.post("/api/run")
