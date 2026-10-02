@@ -1,0 +1,10 @@
+# Operator-editable list. The desk drafts three shapes from this set
+# and picks one. Add or strike a line; do not ask the model to invent a
+# seventh kind.
+shapes:
+  - software
+  - service
+  - marketplace
+  - data product
+  - financing or insurance
+  - training or media

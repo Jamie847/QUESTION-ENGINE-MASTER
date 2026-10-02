@@ -371,6 +371,47 @@ h2 {
 
 code { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.86em; }
 
+.opp {
+  background: var(--card);
+  border: 1px solid var(--rule);
+  padding: 1rem 1.1rem 1.15rem;
+  margin: 0 0 1.15rem;
+  box-shadow: var(--shadow);
+}
+.opp h3 {
+  font-family: Fraunces, serif;
+  font-size: 1.2rem;
+  margin: 0.15rem 0 0.4rem;
+}
+.opp h4 { font-size: 1rem; margin: 0.8rem 0 0.3rem; }
+.claim-list { list-style: none; padding: 0; }
+.claim-list li { padding: 0.35rem 0; border-bottom: 1px dashed var(--rule); }
+.opp-fields { margin: 0.6rem 0; }
+.opp-fields div { margin: 0.45rem 0; }
+.opp-fields dt {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.opp-fields dd { margin: 0.1rem 0 0; }
+.verdict-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+  margin-top: 0.5rem;
+}
+.assets label { display: block; margin: 0.7rem 0; }
+.assets textarea {
+  width: 100%;
+  font: inherit;
+  padding: 0.45rem 0.5rem;
+  border: 1px solid var(--rule);
+  background: var(--card);
+}
+
 @media (max-width: 640px) {
   .mast { flex-direction: column; align-items: flex-start; }
   .q-actions { flex-direction: column; align-items: flex-start; }

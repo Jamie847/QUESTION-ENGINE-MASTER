@@ -30,6 +30,56 @@ document.querySelectorAll(".stars").forEach((el) => {
   });
 });
 
+document.querySelectorAll(".assay").forEach((btn) => {
+  btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    const label = btn.textContent;
+    btn.textContent = "Assaying…";
+    try {
+      const out = await postJSON(`/api/questions/${btn.dataset.qid}/assay`);
+      if (out.opportunity_id) {
+        window.location.href = `/opportunities#opp-${out.opportunity_id}`;
+        return;
+      }
+    } catch (err) {
+      alert("Could not assay: " + err.message);
+    }
+    btn.disabled = false;
+    btn.textContent = label;
+  });
+});
+
+document.querySelectorAll(".verdict").forEach((btn) => {
+  btn.addEventListener("click", async () => {
+    const card = btn.closest(".opp");
+    const why = (card && card.querySelector(".verdict-why") && card.querySelector(".verdict-why").value) || "";
+    try {
+      await postJSON(`/api/opportunities/${btn.dataset.oid}/verdict`, {
+        verdict: btn.dataset.verdict,
+        why,
+      });
+      window.location.reload();
+    } catch (err) {
+      alert(err.message);
+    }
+  });
+});
+
+const assetsForm = document.getElementById("assets-form");
+if (assetsForm) {
+  assetsForm.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const data = Object.fromEntries(new FormData(assetsForm).entries());
+    const msg = assetsForm.querySelector("[data-assets-msg]");
+    try {
+      await postJSON("/api/assets", data);
+      if (msg) msg.textContent = "Saved. The desk will read this on the next card.";
+    } catch (err) {
+      if (msg) msg.textContent = err.message;
+    }
+  });
+}
+
 document.querySelectorAll(".promote").forEach((btn) => {
   btn.addEventListener("click", async () => {
     try {

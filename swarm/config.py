@@ -27,6 +27,12 @@ def lenses() -> list[dict[str, Any]]:
     return [ln for ln in rows if ln.get("enabled", True) and ln.get("phase", 1) <= 1]
 
 
+@lru_cache
+def business_shapes() -> list[str]:
+    rows = _load_yaml("shapes.yaml").get("shapes") or []
+    return [str(name) for name in rows if str(name).strip()]
+
+
 def vertical_by_id(vid: str) -> dict[str, Any] | None:
     for v in verticals():
         if v["id"] == vid:

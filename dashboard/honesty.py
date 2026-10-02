@@ -203,7 +203,13 @@ def failure_lines_from_warnings(warnings: list[Any] | None) -> list[str]:
         low = text.lower()
         keep = (
             text.startswith(
-                ("Scouting:", "Topic pairing:", "Writing questions:", "Judging:")
+                (
+                    "Scouting:",
+                    "Topic pairing:",
+                    "Writing questions:",
+                    "Judging:",
+                    "Opportunity desk:",
+                )
             )
             or text.startswith("No topic pairings")
             or "refused by" in low

@@ -234,6 +234,70 @@ class DeployMarkerRow(Base):
     )
 
 
+class OperatorAssetsRow(Base):
+    """Operator-written. The system never fills these fields."""
+
+    __tablename__ = "operator_assets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    businesses: Mapped[str] = mapped_column(Text, default="")
+    reach: Mapped[str] = mapped_column(Text, default="")
+    skills: Mapped[str] = mapped_column(Text, default="")
+    capital_time: Mapped[str] = mapped_column(Text, default="")
+    wont_do: Mapped[str] = mapped_column(Text, default="")
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class OpportunityRow(Base):
+    __tablename__ = "opportunities"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    run_id: Mapped[int] = mapped_column(Integer, index=True)
+    question_id: Mapped[str] = mapped_column(String(64), index=True)
+    status: Mapped[str] = mapped_column(String(32), default="completed", index=True)
+    skip_reason: Mapped[str] = mapped_column(Text, default="")
+    claims: Mapped[list[Any]] = mapped_column(JSONType, default=list)
+    whats_actually_true: Mapped[str] = mapped_column(Text, default="")
+    shapes: Mapped[list[Any]] = mapped_column(JSONType, default=list)
+    picked_shape: Mapped[str] = mapped_column(String(64), default="")
+    who_has_problem: Mapped[str] = mapped_column(Text, default="")
+    who_pays: Mapped[str] = mapped_column(Text, default="")
+    what_they_use_today: Mapped[str] = mapped_column(Text, default="")
+    why_now: Mapped[str] = mapped_column(Text, default="")
+    how_it_charges: Mapped[str] = mapped_column(Text, default="")
+    rivals: Mapped[str] = mapped_column(Text, default="")
+    first_prospects: Mapped[list[Any]] = mapped_column(JSONType, default=list)
+    fit: Mapped[str] = mapped_column(Text, default="")
+    weekend_test: Mapped[str] = mapped_column(Text, default="")
+    why_it_might_fail: Mapped[str] = mapped_column(Text, default="")
+    red_flags: Mapped[list[Any]] = mapped_column(JSONType, default=list)
+    check_note: Mapped[str] = mapped_column(Text, default="")
+    written_by: Mapped[str] = mapped_column(String(128), default="")
+    cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    on_demand: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    searches: Mapped[list[Any]] = mapped_column(JSONType, default=list)
+    latest_verdict: Mapped[str] = mapped_column(String(16), default="")
+    latest_verdict_why: Mapped[str] = mapped_column(Text, default="")
+    latest_verdict_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class OpportunityVerdictRow(Base):
+    __tablename__ = "opportunity_verdicts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    opportunity_id: Mapped[str] = mapped_column(
+        ForeignKey("opportunities.id", ondelete="CASCADE"), index=True
+    )
+    verdict: Mapped[str] = mapped_column(String(16), index=True)
+    why: Mapped[str] = mapped_column(Text, default="")
+    decided_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
 class RunLockRow(Base):
     __tablename__ = "run_locks"
 

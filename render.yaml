@@ -69,6 +69,10 @@ envVarGroups:
         value: "3"
       - key: SOURCE_DEAD_AFTER_RUNS
         value: "3"
+      - key: OPPORTUNITY_MAX
+        value: "5"
+      - key: ASSAYS_PER_DAY
+        value: "10"
       - key: PYTHON_VERSION
         value: "3.12.3"
 

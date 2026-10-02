@@ -113,3 +113,40 @@ class BraveSource(SourceAdapter):
                             )
                         )
         return signals
+
+
+def search_web(query: str, *, count: int = 5) -> list[dict[str, Any]]:
+    """One Brave Web search for the desk. Returns title/url/snippet only."""
+    settings = get_settings()
+    key = settings.brave_api_key
+    if not key or not query.strip():
+        return []
+    headers = {
+        "User-Agent": settings.user_agent,
+        "Accept": "application/json",
+        "X-Subscription-Token": key,
+    }
+    params = {"q": query.strip(), "count": count}
+    with httpx.Client(timeout=settings.source_timeout_s, headers=headers) as client:
+        resp = client.get(WEB_URL, params=params)
+        if resp.status_code == 429:
+            wait = retry_wait_seconds(resp, settings.brave_min_interval_s)
+            time.sleep(wait)
+            resp = client.get(WEB_URL, params=params)
+        if resp.status_code == 429:
+            return []
+        resp.raise_for_status()
+        rows = []
+        for item in extract_brave_results(resp.json())[:count]:
+            title = (item.get("title") or "").strip()
+            url = (item.get("url") or "").strip()
+            if not title or not url:
+                continue
+            rows.append(
+                {
+                    "title": title,
+                    "url": url,
+                    "snippet": clip_snippet(item.get("description") or ""),
+                }
+            )
+        return rows
