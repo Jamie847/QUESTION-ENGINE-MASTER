@@ -42,7 +42,11 @@ Official `--embed` number is **blocked**. 11 digest days < 21. No Voyage key on 
 
 ## Acceptance
 
-One Today run was started after Live (`POST /api/run`, 2026-10-02). CP reads it on the dashboard. Until the Voyage key is pasted, new cards will show **nothing related yet**, the digest footer may read **memory not updated**, and GLP-1 / earnings-rule searches will be empty. Paste the key, redeploy (or wait for the next deploy) — backfill runs once, then those checks have something to hit.
+Live Today and Opportunities already show **Related from memory** / **nothing related yet** on the three existing cards. Archive **Search memory** is up (`200 searches left today`); `?mq=GLP-1` returns the empty-catalog line because nothing is embedded.
+
+**Run 26** (`8b810a8`) was started from Today after Live, reached **desk**, then was orphaned when findings PR #8 auto-deployed. That was a CC mistake — do not deploy during a run. `POST /api/run?force=true` then hit **MAX_RUNS_PER_DAY=5** (runs 22–26 today). There will not be a finished WO-014 acceptance digest until tomorrow, or until the Operator raises the ceiling / pastes Voyage and Trigger-Runs the cron.
+
+Until the Voyage key is pasted: backfill stays `embedded=0`, Search memory stays empty, new cards stay **nothing related yet**, and a finished run's footer will read **memory not updated**. Paste the key; the next deploy retries backfill (marker not written).
 
 ## Operator to-do (unchanged)
 
