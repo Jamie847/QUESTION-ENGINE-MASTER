@@ -17,9 +17,8 @@ document.querySelectorAll(".stars").forEach((el) => {
     if (!btn) return;
     const stars = Number(btn.dataset.star);
     const qid = el.dataset.qid;
-    const whyInput = el.querySelector(".why");
-    const why = whyInput ? whyInput.value : "";
     try {
+      const why = (el.querySelector(".why") && el.querySelector(".why").value) || "";
       await postJSON(`/api/questions/${qid}/rating`, { stars, why });
       el.dataset.stars = String(stars);
       el.querySelectorAll("[data-star]").forEach((b) => {
@@ -31,23 +30,11 @@ document.querySelectorAll(".stars").forEach((el) => {
   });
 });
 
-document.querySelectorAll(".chips").forEach((bar) => {
-  bar.addEventListener("click", (ev) => {
-    const btn = ev.target.closest(".chip");
-    if (!btn) return;
-    bar.querySelectorAll(".chip").forEach((chip) => chip.classList.toggle("on", chip === btn));
-    const vert = btn.dataset.vert || "";
-    document.querySelectorAll(".bank-group").forEach((group) => {
-      group.hidden = Boolean(vert) && group.dataset.vert !== vert;
-    });
-  });
-});
-
 document.querySelectorAll(".promote").forEach((btn) => {
   btn.addEventListener("click", async () => {
     try {
       await postJSON(`/api/questions/${btn.dataset.qid}/promote`);
-      btn.textContent = "Saved — ideation not built yet.";
+      btn.textContent = "Saved";
       btn.disabled = true;
     } catch (err) {
       alert("Could not promote: " + err.message);
@@ -55,21 +42,38 @@ document.querySelectorAll(".promote").forEach((btn) => {
   });
 });
 
-const runBtn = document.getElementById("run-btn");
-if (runBtn) {
-  runBtn.addEventListener("click", async () => {
-    runBtn.disabled = true;
-    const msg = document.getElementById("run-msg");
-    try {
-      await postJSON("/api/run");
-      if (msg) msg.textContent = "Swarm started. This page will pick up the new digest.";
-      pollUntilIdle();
-    } catch (err) {
-      runBtn.disabled = false;
-      if (msg) msg.textContent = err.message;
-    }
+const runButtons = document.querySelectorAll("[data-run-btn]");
+const runMsgs = document.querySelectorAll("[data-run-msg]");
+
+function setRunMessage(text) {
+  runMsgs.forEach((el) => {
+    el.textContent = text;
   });
 }
+
+function setRunDisabled(disabled) {
+  runButtons.forEach((btn) => {
+    if (btn.dataset.ceiling === "1") return;
+    btn.disabled = disabled;
+  });
+}
+
+runButtons.forEach((runBtn) => {
+  if (runBtn.disabled && runBtn.textContent.toLowerCase().includes("ceiling")) {
+    runBtn.dataset.ceiling = "1";
+  }
+  runBtn.addEventListener("click", async () => {
+    setRunDisabled(true);
+    try {
+      await postJSON("/api/run");
+      setRunMessage("reading sources");
+      pollUntilIdle();
+    } catch (err) {
+      setRunDisabled(false);
+      setRunMessage(err.message);
+    }
+  });
+});
 
 const issueBtn = document.getElementById("issue-btn");
 if (issueBtn) {
@@ -90,6 +94,20 @@ if (issueBtn) {
 if (document.querySelector("[data-poll]")) {
   pollUntilIdle();
 }
+
+document.querySelectorAll("[data-bank-filter]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const key = btn.dataset.bankFilter;
+    document.querySelectorAll("[data-bank-filter]").forEach((other) => {
+      other.classList.toggle("on", other === btn);
+    });
+    const all = document.getElementById("bank-all");
+    if (all) all.hidden = key !== "all";
+    document.querySelectorAll("[data-bank-pane]").forEach((pane) => {
+      pane.hidden = pane.dataset.bankPane !== key;
+    });
+  });
+});
 
 function pollIssueUntilIdle() {
   const started = Date.now();
@@ -115,6 +133,10 @@ function pollUntilIdle() {
   const tick = async () => {
     try {
       const st = await fetch("/api/status").then((r) => r.json());
+      if (st.running) {
+        setRunDisabled(true);
+        setRunMessage(st.stage_words || st.stage || "reading sources");
+      }
       if (!st.running && Date.now() - started > 1500) {
         window.location.reload();
         return;

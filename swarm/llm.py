@@ -135,6 +135,31 @@ def _json_object(text: str) -> dict[str, Any] | None:
     return data if isinstance(data, dict) else None
 
 
+AGENT_STAGE = {
+    "scout": "Scouting",
+    "cross_pollinator": "Topic pairing",
+    "smiths": "Writing questions",
+    "curator": "Judging",
+}
+
+
+def is_refusal_stop(msg: Any = None, error: str = "") -> bool:
+    if msg is not None and getattr(msg, "stop_reason", None) == "refusal":
+        return True
+    return "stop_reason=refusal" in (error or "")
+
+
+def failure_category(*, error: str = "", status: Any = None) -> str:
+    blob = f"{error} {status or ''}".lower()
+    if "stop_reason=refusal" in blob or "refusal" == blob.strip():
+        return "refusal"
+    if "timeout" in blob or "timed out" in blob:
+        return "timeout"
+    if "429" in blob or "rate limit" in blob or "rate_limit" in blob:
+        return "rate limit"
+    return "provider error"
+
+
 class LLM:
     def __init__(self, budget: RunBudget) -> None:
         self.budget = budget
@@ -148,6 +173,9 @@ class LLM:
         self.last_call_id: int | None = None
         self.run_id = 0
         self.agent = ""
+        self.curated_by = ""
+        self.failure_lines: list[str] = []
+        self.refusal_recoveries: list[str] = []
         if self.settings.anthropic_api_key:
             import anthropic
 
@@ -171,6 +199,12 @@ class LLM:
         """Key is set, every attempted call failed. Do not publish templates."""
         return self.available and self.attempts > 0 and self.successes == 0
 
+    def writer_label(self, *, used_model: bool, judgment: bool = False) -> str:
+        if not used_model:
+            return "template"
+        model = self.settings.judgment_model if judgment else self.settings.anthropic_model
+        return f"model:{model}"
+
     def complete_json(
         self,
         *,
@@ -188,6 +222,33 @@ class LLM:
         model = (
             self.settings.judgment_model if judgment else self.settings.anthropic_model
         )
+        return self._complete_once(
+            system=system,
+            user=user,
+            schema=schema,
+            max_tokens=max_tokens,
+            reserve=reserve,
+            estimate_in=estimate_in,
+            estimate_out=estimate_out,
+            judgment=judgment,
+            model=model,
+            retry_of=None,
+        )
+
+    def _complete_once(
+        self,
+        *,
+        system: str,
+        user: str,
+        schema: dict[str, Any],
+        max_tokens: int,
+        reserve: bool,
+        estimate_in: int,
+        estimate_out: int,
+        judgment: bool,
+        model: str,
+        retry_of: int | None,
+    ) -> dict[str, Any] | None:
         estimate = self.budget.estimate_tokens(
             estimate_in, estimate_out, judgment=judgment
         )
@@ -221,7 +282,9 @@ class LLM:
                 error=self.last_error,
                 latency_ms=int((time.perf_counter() - started) * 1000),
                 stop_reason="",
+                retry_of=retry_of,
             )
+            self._note_failure(model, error=self.last_error, recovered_on="")
             return None
 
         usage = getattr(msg, "usage", None)
@@ -242,7 +305,7 @@ class LLM:
             self.failures += 1
             self.last_error = f"no structured payload from {model} (stop_reason={stop})"
             log.error("%s", self.last_error)
-            self._record_call(
+            call_id = self._record_call(
                 model=model,
                 ok=False,
                 system=system,
@@ -254,7 +317,34 @@ class LLM:
                 output_tokens=out_tok,
                 cost_usd=charged,
                 stop_reason=stop,
+                retry_of=retry_of,
             )
+            fallback = (self.settings.fallback_model or "").strip()
+            if (
+                is_refusal_stop(msg, self.last_error)
+                and retry_of is None
+                and fallback
+                and fallback != model
+            ):
+                first_error = self.last_error
+                recovered = self._complete_once(
+                    system=system,
+                    user=user,
+                    schema=schema,
+                    max_tokens=max_tokens,
+                    reserve=reserve,
+                    estimate_in=estimate_in,
+                    estimate_out=estimate_out,
+                    judgment=judgment,
+                    model=fallback,
+                    retry_of=call_id if call_id is not None else 0,
+                )
+                if recovered is not None:
+                    self._note_failure(model, error=first_error, recovered_on=fallback)
+                    return recovered
+                self._note_failure(model, error=first_error, recovered_on="")
+                return None
+            self._note_failure(model, error=self.last_error, recovered_on="")
             return None
         self.successes += 1
         self._record_call(
@@ -269,8 +359,22 @@ class LLM:
             output_tokens=out_tok,
             cost_usd=charged,
             stop_reason=stop,
+            retry_of=retry_of,
         )
         return data
+
+    def _note_failure(self, model: str, *, error: str, recovered_on: str) -> None:
+        stage = AGENT_STAGE.get(self.agent, self.agent or "Model")
+        category = failure_category(error=error)
+        if recovered_on:
+            line = f"{stage}: refused by {model}, recovered on {recovered_on}."
+            self.refusal_recoveries.append(recovered_on)
+        elif category == "refusal":
+            line = f"{stage}: refused by {model}."
+        else:
+            line = f"{stage}: {category} on {model}."
+        if line not in self.failure_lines:
+            self.failure_lines.append(line)
 
     def _record_call(
         self,
@@ -286,9 +390,10 @@ class LLM:
         output_tokens: int = 0,
         cost_usd: float = 0.0,
         stop_reason: str = "",
-    ) -> None:
+        retry_of: int | None = None,
+    ) -> int | None:
         if not self.run_id:
-            return
+            return None
         try:
             from swarm.db import session_scope
             from swarm.orm import AgentCallRow
@@ -308,12 +413,15 @@ class LLM:
                     stop_reason=stop_reason,
                     input_text=blob[:8000],
                     output_text=output[:8000],
+                    retry_of=retry_of,
                 )
                 session.add(row)
                 session.flush()
                 self.last_call_id = row.id
+                return int(row.id)
         except Exception as exc:  # noqa: BLE001
             log.warning("agent_calls write failed: %s", exc)
+            return None
 
     def note_outcome(self, parsed: int, dropped: int) -> None:
         """Smiths report how many questions the payload held and how many validation dropped."""

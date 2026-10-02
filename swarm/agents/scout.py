@@ -6,8 +6,18 @@ from swarm.config import verticals
 from swarm.ids import slug
 from swarm.llm import LLM
 from swarm.models import Brief, Signal, Velocity
+from swarm.primary import prefer_primary_urls
 from swarm.ranking import select_round_robin
 from swarm.settings import get_settings
+
+SCOUT_SLOTS = 18
+
+
+def take_round_robin(
+    signals: list[Signal], slots: int = SCOUT_SLOTS
+) -> list[tuple[Signal, int]]:
+    """Honesty helpers and tests call this name. Ranking is within-source then round-robin."""
+    return select_round_robin(signals, slots)
 
 PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "scout.md").read_text(
     encoding="utf-8"
@@ -102,9 +112,12 @@ def run_scouts(signals: list[Signal], llm: LLM, *, run_id: int = 0) -> list[Brie
                 continue
             seen.add(key)
             counts[sig.source] = counts.get(sig.source, 0) + 1
-        produced = _llm_briefs(cfg, pairs, llm, run_id) or _fallback_briefs(
-            cfg, pairs, run_id
-        )
+        produced = _llm_briefs(cfg, pairs, llm, run_id)
+        if produced is None:
+            if llm.available:
+                produced = []
+            else:
+                produced = _fallback_briefs(cfg, pairs, run_id)
         briefs.extend(produced)
     run_scouts.seen_by_source = counts  # type: ignore[attr-defined]
     return briefs
@@ -126,7 +139,17 @@ def _llm_briefs(
     for raw in data.get("briefs") or []:
         try:
             headline = raw["headline"]
-            urls = urls_from_model(raw, labels)
+            urls = prefer_primary_urls(
+                " ".join(
+                    [
+                        headline,
+                        raw.get("what_is_happening", ""),
+                        raw.get("why_now", ""),
+                    ]
+                ),
+                urls_from_model(raw, labels),
+                [sig for sig, _rank in pairs],
+            )
             out.append(
                 Brief(
                     id=f"r{run_id}-{cfg['id']}-{slug(headline)}",

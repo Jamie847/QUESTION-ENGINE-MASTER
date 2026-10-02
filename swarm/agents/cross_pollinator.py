@@ -54,9 +54,13 @@ SCHEMA = {
 def run_cross_pollinator(
     briefs: list[Brief], llm: LLM, *, run_id: int = 0
 ) -> list[Intersection]:
-    produced = _llm(briefs, llm, run_id) or _fallback(briefs, run_id)
-    # Always persist rejects. If the model forgot, synthesize a few.
-    if not any(not i.accepted for i in produced):
+    produced = _llm(briefs, llm, run_id)
+    if produced is None:
+        if llm.available:
+            return []
+        produced = _fallback(briefs, run_id)
+    # Keyless only: if the model forgot rejects, synthesize a few.
+    if not llm.available and not any(not i.accepted for i in produced):
         produced.extend(_obvious_rejects(briefs, run_id))
     return produced
 

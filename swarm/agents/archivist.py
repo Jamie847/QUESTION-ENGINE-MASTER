@@ -249,13 +249,20 @@ def _question_block(
     for b in related:
         sources.extend(b.sources)
     src_line = " ".join(f"[source]({u})" for u in sources[:3] if u)
-    lines = [
-        f"### {n}. {q.text}",
+    hidden = (q.provenance or "") in {"unlinked", "pre-wo006"}
+    heading = q.title.strip() if q.title else q.text
+    lines = [f"### {n}. {heading}"]
+    if q.title:
+        lines.append(f"- {q.text}")
+    lines += [
         f"- Lens: {q.lens} · Verticals: {' × '.join(q.verticals) or '—'} · "
-        f"Coverage (model guess): **{q.coverage.value}** · Decay: {q.decay_class.value}",
+        f"Coverage (model guess): **{q.coverage.value}** · Decay: {q.decay_class.value}"
+        + (" · **template**" if q.written_by == "template" else ""),
         f"- Context: {context or '—'}",
     ]
-    if src_line:
+    if hidden or not src_line:
+        lines.append("- Sources: sources not recorded")
+    else:
         lines.append(f"- Sources: {src_line}")
     lines.append("")
     return lines

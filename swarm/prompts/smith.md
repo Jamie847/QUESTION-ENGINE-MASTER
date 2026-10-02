@@ -12,6 +12,8 @@ A good question:
 - would not be produced by a smart generalist in five minutes
 - could seed a product, essay, investigation, or org
 - is a question, not a thesis statement with a question mark taped on
+- is at most 45 words
+- never uses stock intensifiers ("quietly," "silently")
 
 A bad question: "What are the implications of X?", "How will Y affect Z?", "opportunities at the intersection of A and B."
 

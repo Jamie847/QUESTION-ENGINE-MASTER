@@ -86,6 +86,15 @@ h2 {
   margin: 0 0 0.35rem;
   font-size: 1.05rem;
 }
+.run-now {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem 1rem;
+  margin: 0.55rem 0 0.85rem;
+}
+.run-now .primary { margin: 0; }
+.run-now .muted { margin: 0; font-size: 0.92rem; }
 .last-run.stale {
   color: var(--accent);
   font-weight: 600;
@@ -118,12 +127,23 @@ h2 {
   padding: 1rem 1.1rem 0.85rem;
   margin: 0.85rem 0;
 }
-.q-text {
+.q-title {
   font-family: Fraunces, serif;
   font-size: 1.22rem;
+  font-weight: 620;
+  line-height: 1.25;
+  margin: 0 0 0.35rem;
+}
+.q-text {
+  font-family: Fraunces, serif;
+  font-size: 1.05rem;
   font-weight: 500;
-  line-height: 1.3;
+  line-height: 1.35;
   margin: 0 0 0.45rem;
+}
+.q-title + .q-text {
+  font-size: 1.02rem;
+  font-weight: 400;
 }
 .q-meta {
   display: flex;
@@ -135,7 +155,40 @@ h2 {
   letter-spacing: 0.05em;
   color: var(--muted);
 }
+.q-from {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin: 0.4rem 0 0;
+  word-break: break-word;
+}
 .q-ctx { color: var(--muted); font-size: 0.95rem; margin: 0.45rem 0 0.2rem; }
+.bank-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.4rem 0 0.8rem;
+}
+.bank-filters button.on {
+  background: var(--ink);
+  color: var(--paper);
+}
+.bank-dedup { margin: 0.2rem 0 0.6rem; font-size: 0.9rem; }
+.bank-vert {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 1.4rem 0 0.4rem;
+  border: 0;
+  padding: 0;
+}
+.read-list { list-style: none; padding: 0; }
+.read-list li { padding: 0.45rem 0; border-bottom: 1px dashed var(--rule); }
+.read-list em { display: block; font-style: normal; font-size: 0.85rem; color: var(--muted); margin-top: 0.15rem; }
+.read-list a { color: var(--accent); word-break: break-all; }
+.stats em { display: block; font-style: normal; color: var(--muted); font-size: 0.88rem; margin-top: 0.15rem; }
 .q-actions {
   display: flex;
   justify-content: space-between;
@@ -153,6 +206,16 @@ h2 {
   line-height: 1;
 }
 .stars button.on { color: var(--accent); }
+.stars .why {
+  display: block;
+  width: 100%;
+  margin-top: 0.35rem;
+  font: inherit;
+  font-size: 0.85rem;
+  border: 1px solid var(--rule);
+  background: var(--card);
+  padding: 0.25rem 0.4rem;
+}
 .text-btn, .filters button, .primary {
   font-family: "IBM Plex Mono", ui-monospace, monospace;
   font-size: 0.72rem;
@@ -249,36 +312,10 @@ h2 {
 }
 .pill.bad { background: #ead9d4; }
 .pill.dead { background: #e8d3c4; color: var(--accent); }
-.pill.off { background: #ece7df; color: var(--muted); }
-.pill.need { background: #f3e2b8; color: #6a4b12; }
-.tag {
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
-  font-size: 0.68rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  border: 1px solid var(--accent);
-  color: var(--accent);
-  padding: 0.05rem 0.35rem;
-}
-.why {
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
-  font-size: 0.75rem;
-  border: 1px solid var(--rule);
-  background: transparent;
-  padding: 0.2rem 0.4rem;
-  min-width: 10rem;
-}
-.chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.5rem 0 1rem; }
-.chip {
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
-  font-size: 0.72rem;
-  border: 1px solid var(--rule);
-  background: transparent;
-  padding: 0.2rem 0.5rem;
-  cursor: pointer;
-}
-.chip.on { border-color: var(--ink); background: var(--card); }
-.run-line { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.78rem; }
+.pill.template { background: #efe0c4; color: var(--accent); }
+.pill.primary { background: #dce8e1; color: var(--accent-2); }
+.q-from a { color: var(--accent); }
+.q-summary { margin: 0 0 0.2rem; color: var(--muted); }
 
 .near-miss-list { list-style: decimal; padding-left: 1.25rem; }
 .near-miss-list li {
@@ -302,6 +339,25 @@ h2 {
   border: 1px solid var(--rule);
   padding: 1rem;
 }
+
+.behind {
+  margin-top: 2.4rem;
+  border-top: 1px solid var(--rule);
+  padding-top: 0.5rem;
+}
+.behind > summary {
+  font-family: Fraunces, serif;
+  font-size: 1.25rem;
+  cursor: pointer;
+  margin: 0 0 0.7rem;
+}
+.saved-list { list-style: none; padding: 0; }
+.saved-list li {
+  padding: 0.45rem 0;
+  border-bottom: 1px dashed var(--rule);
+}
+.taste-steering { margin: 0.45rem 0 0.2rem; }
+.model-written, .sources-read { margin: 0.15rem 0; font-size: 0.95rem; }
 
 .colophon {
   margin-top: 3rem;

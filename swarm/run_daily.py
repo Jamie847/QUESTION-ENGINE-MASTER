@@ -102,6 +102,7 @@ def main(argv: list[str] | None = None) -> int:
                 warnings=[],
                 source_health=[],
                 stages=[],
+                git_commit=settings.git_commit or "",
             )
             session.add(run)
             session.flush()
@@ -205,6 +206,15 @@ def _execute(run_id: int) -> None:
         _set_stage(run_id, StageName.cross_pollinate)
         llm.agent = "cross_pollinator"
         intersections = run_cross_pollinator(briefs, llm, run_id=run_id)
+        if llm.available and not any(i.accepted for i in intersections):
+            pairing = next(
+                (line for line in llm.failure_lines if line.startswith("Topic pairing")),
+                "No topic pairings this run: no model pairings were returned.",
+            )
+            if pairing.startswith("Topic pairing"):
+                warnings.append(f"No topic pairings this run. {pairing}")
+            else:
+                warnings.append(pairing)
         _persist_intersections(run_id, intersections)
         _checkpoint(run_id, StageName.cross_pollinate, warnings=warnings)
     else:
@@ -267,6 +277,7 @@ def _execute(run_id: int) -> None:
             warnings.append("ANTHROPIC_API_KEY unset — heuristic writer used")
             degraded = True
         elif llm.failures:
+            warnings.extend(llm.failure_lines)
             warnings.append(
                 f"Anthropic: {llm.successes} ok / {llm.failures} failed "
                 f"of {llm.attempts} attempts. Last error: {llm.last_error}"
@@ -481,6 +492,7 @@ def _persist_questions(run_id: int, questions: list[Question], *, replace: bool)
                     id=q.id,
                     run_id=run_id,
                     text=q.text,
+                    title=q.title or "",
                     lens=q.lens,
                     verticals=q.verticals,
                     coverage=q.coverage.value,
@@ -596,6 +608,7 @@ def _load_questions(run_id: int) -> list[Question]:
             Question(
                 id=r.id,
                 text=r.text,
+                title=getattr(r, "title", "") or "",
                 lens=r.lens,
                 verticals=r.verticals or [],
                 coverage=Coverage(r.coverage),

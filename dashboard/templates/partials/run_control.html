@@ -1,0 +1,19 @@
+<div class="run-now">
+  <button
+    type="button"
+    class="primary"
+    data-run-btn
+    {% if run_control.at_ceiling %}disabled data-ceiling="1"{% elif active_run %}disabled{% endif %}
+  >
+    {% if run_control.at_ceiling %}Ceiling reached{% else %}Run now{% endif %}
+  </button>
+  <p class="muted" data-run-msg>
+    {% if run_control.at_ceiling %}
+      {{ run_control.ceiling_reason }}
+    {% elif active_run %}
+      {{ run_control.stage_words if run_control.stage_words is defined and run_control.stage_words else "reading sources" }}
+    {% else %}
+      {% if run_control.expected_cost_label %}{{ run_control.expected_cost_label }} · {% endif %}{{ run_control.runs_remaining_today }} run{% if run_control.runs_remaining_today != 1 %}s{% endif %} left today
+    {% endif %}
+  </p>
+</div>

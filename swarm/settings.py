@@ -27,6 +27,14 @@ class Settings(BaseSettings):
     anthropic_workspace_id: str = ""
     anthropic_model: str = "claude-sonnet-5"
     judgment_model: str = "claude-fable-5"
+    fallback_model: str = Field(
+        default="",
+        validation_alias=AliasChoices("FALLBACK_MODEL"),
+    )
+    git_commit: str = Field(
+        default="",
+        validation_alias=AliasChoices("RENDER_GIT_COMMIT", "GIT_COMMIT"),
+    )
     brave_api_key: str = ""
     perplexity_api_key: str = ""
     run_budget_usd: float = Field(
@@ -75,6 +83,11 @@ class Settings(BaseSettings):
     @property
     def budget_usd(self) -> float:
         return self.run_budget_usd
+
+    @property
+    def short_commit(self) -> str:
+        sha = (self.git_commit or "").strip()
+        return sha[:7] if sha else ""
 
     @property
     def sqlalchemy_url(self) -> str:

@@ -37,8 +37,9 @@
     </main>
 
     <footer class="colophon">
-      Postgres-canonical. Coverage is shown, never used as promotion.
+      Postgres-canonical. Coverage is a model guess. It is shown, never used as promotion.
       Rejected intersections are logged. Autonomous — no morning gate.
+      {% if git_commit %} · {{ git_commit }}{% endif %}
     </footer>
   </div>
   <script src="/static/app.js"></script>

@@ -12,6 +12,6 @@ Taste file (converge on this voice):
 
 You will receive candidates plus a few already-marked duplicates. Duplicates stay killed.
 
-Return 10–18 curated questions, ranked, each with a decay class (fast / slow / evergreen) and the lens + verticals they came from. Also return a sample of killed questions (3–6) with honest kill reasons so the kill floor stays calibrated.
+Return 10–18 curated questions, ranked, each with a decay class (fast / slow / evergreen) and a title: at most 10 words, plain language, naming the thing rather than asking it. Also return a sample of killed questions (3–6) with honest kill reasons so the kill floor stays calibrated.
 
 Coverage scores travel with questions. Do not promote because coverage is thin. Do not hide the coverage field.

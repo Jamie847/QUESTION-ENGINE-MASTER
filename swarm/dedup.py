@@ -98,11 +98,58 @@ def _is_curated(q: object) -> bool:
     return value == QuestionStatus.curated.value
 
 
+_ACRONYM = re.compile(r"\b[A-Z]{2,}(?:-\d+)?\b")
+_PROPER = re.compile(r"\b(?:[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\b")
+_HYPHEN_NUM = re.compile(r"\b[A-Za-z]{2,}-\d+\b")
+_TITLE_NUM = re.compile(r"\bTitle\s+[IVXLC]+\b")
+
+
+def named_terms(text: str) -> set[str]:
+    blob = text or ""
+    terms = {m.group(0).lower() for m in _ACRONYM.finditer(blob)}
+    terms.update(m.group(0).lower() for m in _PROPER.finditer(blob))
+    terms.update(m.group(0).lower() for m in _HYPHEN_NUM.finditer(blob))
+    terms.update(m.group(0).lower() for m in _TITLE_NUM.finditer(blob))
+    return terms
+
+
+def _urls_for(question: object, briefs_by_id: dict) -> set[str]:
+    urls: set[str] = set()
+    for bid in getattr(question, "brief_ids", None) or []:
+        brief = briefs_by_id.get(bid)
+        if brief is None:
+            continue
+        urls.update(u for u in (getattr(brief, "sources", None) or []) if u)
+    return urls
+
+
+def _share_provenance(
+    a: object, b: object, briefs_by_id: dict
+) -> tuple[str, list[str]]:
+    briefs_a = set(getattr(a, "brief_ids", None) or [])
+    briefs_b = set(getattr(b, "brief_ids", None) or [])
+    shared_briefs = sorted(briefs_a & briefs_b)
+    if shared_briefs:
+        return "brief", shared_briefs
+    shared_urls = sorted(_urls_for(a, briefs_by_id) & _urls_for(b, briefs_by_id))
+    if shared_urls:
+        return "url", shared_urls
+    ia = getattr(a, "intersection_id", None)
+    ib = getattr(b, "intersection_id", None)
+    if ia and ib and ia == ib:
+        return "intersection", [str(ia)]
+    terms = sorted(named_terms(getattr(a, "text", "")) & named_terms(getattr(b, "text", "")))
+    if len(terms) >= 2:
+        return "terms", terms
+    return "none", []
+
+
 def sample_near_miss_pairs(
     today: list,
     prior: list,
     *,
     n: int = 3,
+    briefs_by_id: dict | None = None,
 ) -> list[NearMissPair]:
     """Surviving questions from adjacent days, ranked so a person can flag paraphrase.
 
@@ -115,6 +162,42 @@ def sample_near_miss_pairs(
     prior_q = [q for q in prior if _is_curated(q)]
     if not today_q or not prior_q:
         return []
+
+    if briefs_by_id is not None:
+        rank_of = {"brief": 0, "url": 0, "intersection": 1, "terms": 2}
+        ranked_p: list[tuple[int, NearMissPair]] = []
+        for t in today_q:
+            for p in prior_q:
+                kind, _shared = _share_provenance(t, p, briefs_by_id)
+                if kind == "none":
+                    continue
+                va = set(getattr(t, "verticals", None) or [])
+                vb = set(getattr(p, "verticals", None) or [])
+                ranked_p.append(
+                    (
+                        rank_of[kind],
+                        NearMissPair(
+                            today_text=t.text,
+                            prior_text=p.text,
+                            score=round(similarity(t.text, p.text), 3),
+                            shared_verticals=sorted(va & vb),
+                            share_kind=kind,
+                        ),
+                    )
+                )
+        ranked_p.sort(key=lambda row: row[0])
+        out: list[NearMissPair] = []
+        seen_today: set[str] = set()
+        seen_prior: set[str] = set()
+        for _rank, pair in ranked_p:
+            if pair.today_text in seen_today or pair.prior_text in seen_prior:
+                continue
+            seen_today.add(pair.today_text)
+            seen_prior.add(pair.prior_text)
+            out.append(pair)
+            if len(out) >= n:
+                break
+        return out
 
     ranked: list[tuple[int, float, NearMissPair]] = []
     for t in today_q:

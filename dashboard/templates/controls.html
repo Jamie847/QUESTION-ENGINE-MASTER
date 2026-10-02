@@ -8,14 +8,29 @@
 </section>
 
 <section class="run-box">
-  <button type="button" id="run-btn" class="primary">Run swarm now</button>
-  <p class="muted" id="run-msg">
-    Budget ${{ "%.2f"|format(settings.budget_usd) }} ·
-    volume {{ settings.anthropic_model }} ·
-    judgment {{ settings.judgment_model }} ·
-    {% if settings.anthropic_api_key %}Anthropic live{% else %}heuristic writer (no API key){% endif %}
-    {% if settings.anthropic_workspace_id %} · workspace set{% endif %}
+  <button
+    type="button"
+    class="primary"
+    data-run-btn
+    {% if run_control.at_ceiling %}disabled data-ceiling="1"{% elif active_run %}disabled{% endif %}
+  >
+    {% if run_control.at_ceiling %}Ceiling reached{% else %}Run swarm now{% endif %}
+  </button>
+  <p class="muted" data-run-msg>
+    {% if run_control.at_ceiling %}
+      {{ run_control.ceiling_reason }}
+    {% elif active_run %}
+      {{ run_control.stage_words if run_control.stage_words is defined and run_control.stage_words else "reading sources" }}
+    {% else %}
+      {% if run_control.expected_cost_label %}{{ run_control.expected_cost_label }} · {% endif %}{{ run_control.runs_remaining_today }} run{% if run_control.runs_remaining_today != 1 %}s{% endif %} left today
+      · Budget ${{ "%.2f"|format(settings.budget_usd) }} ·
+      volume {{ settings.anthropic_model }} ·
+      judgment {{ settings.judgment_model }} ·
+      {% if settings.anthropic_api_key %}Anthropic live{% else %}heuristic writer (no API key){% endif %}
+      {% if settings.anthropic_workspace_id %} · workspace set{% endif %}
+    {% endif %}
   </p>
+  <p class="muted">volume {{ settings.anthropic_model }} · judgment {{ settings.judgment_model }}</p>
   {% set latest = runs[0] if runs else none %}
   {% if latest and latest.status == 'failed' %}
   <p class="st-failed">
@@ -28,24 +43,21 @@
 
 <section>
   <h2>Verticals &amp; lenses (Phase 1)</h2>
-  <p class="hint">Thinner swarm on purpose. Edit <code>swarm/config/*.yaml</code> to add more — no new Python.</p>
+  <p class="hint">Thinner swarm on purpose. Edit <code>swarm/config/*.yaml</code> to add more — no new Python. Queries and essences below are what the fetch and the smiths actually use.</p>
   <ul class="stats">
     {% for v in verticals %}
     <li>
       Vertical <strong>{{ v.name }}</strong>
-      <div class="muted">search: {{ (v.search_queries or []) | join(" · ") }}</div>
-      {% if v.arxiv_categories %}<div class="muted">arXiv: {{ v.arxiv_categories | join(", ") }}</div>{% endif %}
-      {% if v.openalex_terms %}<div class="muted">OpenAlex: {{ v.openalex_terms | join(" · ") }}</div>{% endif %}
-      {% if v.sam_keywords %}<div class="muted">SAM: {{ v.sam_keywords | join(" · ") }}{% if v.sam_naics %} · NAICS {{ v.sam_naics | join(", ") }}{% endif %}</div>{% endif %}
+      <em>queries: {{ (v.search_queries or []) | join(" · ") }}</em>
     </li>
     {% endfor %}
     {% for ln in lenses %}
-    <li>Lens <strong>{{ ln.name }}</strong><div class="muted">{{ ln.essence }}</div></li>
+    <li>
+      Lens <strong>{{ ln.name }}</strong>
+      <em>{{ ln.essence }}</em>
+    </li>
     {% endfor %}
   </ul>
-  {% if missing_keys %}
-  <p class="st-failed">Needs key: {{ missing_keys | join(", ") }}. The run continues without them.</p>
-  {% endif %}
 </section>
 
 <section>
@@ -55,7 +67,7 @@
   {% endif %}
   <table class="runs">
     <thead>
-      <tr><th>ID</th><th>Status</th><th>Stage</th><th>Cost</th><th>Start, finish, duration</th><th>Health</th></tr>
+      <tr><th>ID</th><th>Status</th><th>Stage</th><th>Cost</th><th>Started</th><th>Health</th></tr>
     </thead>
     <tbody>
       {% for r in runs %}
@@ -64,17 +76,15 @@
         <td class="st-{{ r.status }}">{{ r.status }}</td>
         <td>{{ r.current_stage }}</td>
         <td>${{ "%.2f"|format(r.cost_usd or 0) }}</td>
-        <td>{{ fmt_stamp(r.started_at) }} → {{ fmt_stamp(r.finished_at) }} · {{ fmt_duration(r.started_at, r.finished_at) }}</td>
+        <td>{{ started_labels.get(r.id, r.started_at) }}{% if r.git_commit %} · {{ r.git_commit[:7] }}{% endif %}</td>
         <td>
           {% for h in (r.source_health or []) %}
-          <span class="pill {% if h.error == 'off' %}off{% elif h.error == 'needs key' %}need{% elif h.dead %}dead{% elif h.ok %}ok{% else %}bad{% endif %}">
-            {{ h.source }}
-            {% if h.error == 'off' %}off{% elif h.error == 'needs key' %}needs key{% else %}{{ h.count }}{% endif %}
-            {% if h.dead %} dead{% if h.last_ok %} · {{ h.last_ok }}{% endif %}{% endif %}
-            {% if h.rate_limited %} · 429 {{ h.rate_limited | join('; ') }}{% elif h.error and h.error not in ['off', 'needs key'] %} · {{ h.error }}{% endif %}
-          </span>
+          <span class="pill {% if h.dead %}dead{% elif h.ok %}ok{% else %}bad{% endif %}">{{ h.source }} {{ h.count }}{% if h.dead %} dead{% if h.last_ok %} · {{ h.last_ok }}{% endif %}{% endif %}</span>
           {% endfor %}
           {% if r.error %}<div class="muted">{{ r.error }}</div>{% endif %}
+          {% for line in run_failure_lines.get(r.id, []) %}
+          <div class="muted">{{ line }}</div>
+          {% endfor %}
         </td>
       </tr>
       {% endfor %}
