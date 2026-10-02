@@ -15,6 +15,20 @@ from swarm.sources.movers import emit_movers
 API = "https://publicreporting.cftc.gov/resource/6dca-aqww.json"
 
 
+def cftc_params(market: str, *, limit: int = 80) -> dict[str, str]:
+    needle = (market or "").replace("'", "''").strip().upper()
+    where = (
+        f"upper(market_and_exchange_names) like '%{needle}%'"
+        if needle
+        else "report_date_as_yyyy_mm_dd IS NOT NULL"
+    )
+    return {
+        "$limit": str(limit),
+        "$order": "report_date_as_yyyy_mm_dd DESC",
+        "$where": where,
+    }
+
+
 def extract_points(rows: list[dict[str, Any]], market: str) -> tuple[list[float], list[str]]:
     values: list[float] = []
     dates: list[str] = []
@@ -57,22 +71,48 @@ class CftcSource(SourceAdapter):
             return []
         signals: list[Signal] = []
         async with httpx.AsyncClient(timeout=settings.source_timeout_s, headers=headers) as client:
-            resp = await client.get(API, params={"$limit": 400, "$order": "report_date_as_yyyy_mm_dd"})
-            resp.raise_for_status()
-            payload = resp.json()
-            rows = payload if isinstance(payload, list) else []
             for item in markets:
-                values, dates = extract_points(rows, str(item.get("market") or item.get("id") or ""))
-                signals.extend(
-                    emit_movers(
-                        source=self.name,
-                        series_id=str(item.get("id") or item.get("market") or "cot"),
-                        label=item.get("label") or "CFTC non-commercial longs",
-                        unit=item.get("unit") or "contracts",
-                        values=values,
-                        dates=dates,
-                        url="https://www.cftc.gov/MarketReports/CommitmentsofTraders/index.htm",
-                        vertical="commodities",
-                    )
+                market = str(item.get("market") or item.get("id") or "")
+                resp = await client.get(API, params=cftc_params(market))
+                resp.raise_for_status()
+                payload = resp.json()
+                rows = payload if isinstance(payload, list) else []
+                values, dates = extract_points(rows, market)
+                movers = emit_movers(
+                    source=self.name,
+                    series_id=str(item.get("id") or item.get("market") or "cot"),
+                    label=item.get("label") or "CFTC non-commercial longs",
+                    unit=item.get("unit") or "contracts",
+                    values=values,
+                    dates=dates,
+                    url="https://www.cftc.gov/MarketReports/CommitmentsofTraders/index.htm",
+                    vertical="commodities",
                 )
+                if movers:
+                    signals.extend(movers)
+                    continue
+                if values and dates:
+                    latest = values[-1]
+                    label = item.get("label") or "CFTC non-commercial longs"
+                    unit = item.get("unit") or "contracts"
+                    text = f"{label} at {latest:,.0f} {unit} as of {dates[-1]}"
+                    signals.append(
+                        Signal(
+                            source=self.name,
+                            title=text,
+                            url="https://www.cftc.gov/MarketReports/CommitmentsofTraders/index.htm",
+                            snippet=text,
+                            score=3.4,
+                            vertical_hints=["commodities"],
+                            raw={
+                                "series_id": str(item.get("id") or market or "cot"),
+                                "label": label,
+                                "unit": unit,
+                                "latest": latest,
+                                "data_date": dates[-1],
+                                "primary": True,
+                                "mover": False,
+                            },
+                        )
+                    )
         return signals

@@ -192,9 +192,11 @@ class LLM:
     def available(self) -> bool:
         return self._client is not None
 
-    def writer_name(self, *, judgment: bool = False) -> str:
-        model = self.settings.judgment_model if judgment else self.settings.anthropic_model
-        return f"model:{model}"
+    def writer_name(self, *, judgment: bool = False, model: str | None = None) -> str:
+        chosen = model or (
+            self.settings.judgment_model if judgment else self.settings.anthropic_model
+        )
+        return f"model:{chosen}"
 
     def writer_failed(self) -> bool:
         """Key is set, every attempted call failed. Do not publish templates."""
@@ -217,10 +219,11 @@ class LLM:
         estimate_in: int = 2500,
         estimate_out: int = 1500,
         judgment: bool = False,
+        model: str | None = None,
     ) -> dict[str, Any] | None:
         if not self.available:
             return None
-        model = (
+        chosen = model or (
             self.settings.judgment_model if judgment else self.settings.anthropic_model
         )
         return self._complete_once(
@@ -232,7 +235,7 @@ class LLM:
             estimate_in=estimate_in,
             estimate_out=estimate_out,
             judgment=judgment,
-            model=model,
+            model=chosen,
             retry_of=None,
         )
 

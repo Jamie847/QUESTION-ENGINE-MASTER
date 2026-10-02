@@ -43,6 +43,23 @@ def current_lock(name: str = "daily") -> RunLockRow | None:
         return session.scalar(select(RunLockRow).where(RunLockRow.name == name))
 
 
+def held_run_id(name: str = "daily") -> int | None:
+    """Run id for a *live* lock. A stale lock does not hold the deploy."""
+    settings = get_settings()
+    now = datetime.now(timezone.utc)
+    stale_before = now - timedelta(seconds=settings.lock_stale_after_s)
+    with session_scope() as session:
+        row = session.get(RunLockRow, name)
+        if row is None or row.run_id is None:
+            return None
+        acquired = row.acquired_at
+        if acquired is not None and acquired.tzinfo is None:
+            acquired = acquired.replace(tzinfo=timezone.utc)
+        if acquired is None or acquired <= stale_before:
+            return None
+        return int(row.run_id)
+
+
 def locked_run_id(name: str = "daily") -> int | None:
     """Copy the lock's run id out of the session so callers can use it."""
     with session_scope() as session:

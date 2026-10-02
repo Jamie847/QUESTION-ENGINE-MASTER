@@ -93,6 +93,7 @@ class _Scripted:
 def _keyed(monkeypatch, script: list) -> tuple[LLM, _Scripted]:
     monkeypatch.setenv("FALLBACK_MODEL", "claude-opus-5-5")
     monkeypatch.setenv("JUDGMENT_MODEL", "claude-fable-5")
+    monkeypatch.setenv("DESK_MODEL", "claude-fable-5")
     get_settings.cache_clear()
     client = _Scripted(script)
     llm = LLM(RunBudget(5.0))

@@ -42,6 +42,7 @@ def init_db() -> None:
     _migrate_digest_uniqueness(engine)
     _migrate_wo006(engine)
     _migrate_wo008(engine)
+    _migrate_wo012_1(engine)
     _migrate_wo014(engine)
 
 
@@ -160,6 +161,21 @@ def _migrate_wo008(engine: Engine) -> None:
         ("agent_calls", "parsed_count", "INTEGER"),
         ("agent_calls", "dropped_count", "INTEGER"),
         ("agent_calls", "retry_of", "INTEGER"),
+    ]
+    with engine.begin() as conn:
+        for table, column, ddl in specs:
+            if column in _column_names(conn, engine, table):
+                continue
+            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}"))
+
+
+def _migrate_wo012_1(engine: Engine) -> None:
+    """Desk split: commentators, which pages were read, which queries ran."""
+    json_type = "JSON" if engine.dialect.name == "postgresql" else "TEXT"
+    specs = [
+        ("opportunities", "commentators", "TEXT"),
+        ("opportunities", "pages_read", json_type),
+        ("opportunities", "queries_run", json_type),
     ]
     with engine.begin() as conn:
         for table, column, ddl in specs:

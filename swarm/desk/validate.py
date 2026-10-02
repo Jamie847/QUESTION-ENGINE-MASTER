@@ -104,6 +104,7 @@ def fit_from_assets(profile: dict[str, str] | None) -> str:
 def evidence_blob(
     briefs: list[Any],
     searches: list[dict[str, Any]],
+    pages: list[dict[str, Any]] | None = None,
 ) -> str:
     parts: list[str] = []
     for brief in briefs:
@@ -121,4 +122,7 @@ def evidence_blob(
         parts.append(str(hit.get("snippet") or ""))
         parts.append(str(hit.get("url") or ""))
         parts.append(str(hit.get("query") or ""))
+    for page in pages or []:
+        parts.append(str(page.get("url") or ""))
+        parts.append(str(page.get("text") or ""))
     return "\n".join(parts)

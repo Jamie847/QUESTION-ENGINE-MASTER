@@ -284,7 +284,10 @@ def _opportunity_view(row: OpportunityRow) -> dict:
         "why_now": row.why_now,
         "how_it_charges": row.how_it_charges,
         "rivals": row.rivals,
+        "commentators": row.commentators,
         "first_prospects": row.first_prospects or [],
+        "pages_read": row.pages_read or [],
+        "queries_run": row.queries_run or [],
         "fit": row.fit,
         "weekend_test": row.weekend_test,
         "why_it_might_fail": row.why_it_might_fail,
@@ -613,6 +616,7 @@ def archive(
     from swarm.memory.search_cap import remaining_searches, take_search
     from swarm.memory.store import search_memory
 
+    voyage_missing = not (get_settings().voyage_api_key or "").strip()
     memory_remaining = remaining_searches()
     if mq.strip():
         if not take_search():
@@ -620,6 +624,9 @@ def archive(
                 "Search memory cap reached for today "
                 f"({get_settings().memory_searches_per_day} / day)."
             )
+        elif voyage_missing:
+            memory_results = []
+            memory_remaining = remaining_searches()
         else:
             memory_results = search_memory(
                 mq,
@@ -656,6 +663,7 @@ def archive(
             "memory_results": memory_results,
             "memory_error": memory_error,
             "memory_remaining": memory_remaining,
+            "voyage_missing": voyage_missing,
         },
     )
 

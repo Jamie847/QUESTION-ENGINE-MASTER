@@ -5,6 +5,7 @@ from swarm.lock import (
     LockBusy,
     acquire_lock,
     fail_unlocked_running_runs,
+    held_run_id,
     locked_run_id,
     release_lock,
 )
@@ -73,3 +74,35 @@ def test_unlocked_running_row_is_failed_and_not_treated_as_live():
         assert row is not None
         assert row.status == "failed"
         assert "orphaned" in (row.error or "")
+
+
+def test_refuse_if_locked_fails_deploy_when_a_run_holds_the_lock(capsys):
+    """A live lock must fail preDeploy so the old instance keeps serving."""
+    from datetime import datetime, timedelta, timezone
+
+    from swarm.orm import RunLockRow
+    from swarm.run_daily import main
+
+    init_db()
+    release_lock()
+    acquire_lock(26)
+    assert held_run_id() == 26
+    rc = main(["--refuse-if-locked"])
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "REFUSE_DEPLOY lock held by run 26" in out
+
+    with session_scope() as session:
+        row = session.get(RunLockRow, "daily")
+        assert row is not None
+        row.acquired_at = datetime.now(timezone.utc) - timedelta(seconds=8000)
+    assert held_run_id() is None
+    rc = main(["--refuse-if-locked"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "REFUSE_DEPLOY ok" in out
+
+    release_lock()
+    rc = main(["--refuse-if-locked"])
+    assert rc == 0
+    assert "REFUSE_DEPLOY ok" in capsys.readouterr().out

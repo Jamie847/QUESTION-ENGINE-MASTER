@@ -72,6 +72,15 @@ class Settings(BaseSettings):
     sam_gov_api_key: str = ""
     eia_api_key: str = ""
     fred_api_key: str = ""
+    reliefweb_appname: str = Field(
+        default="",
+        validation_alias=AliasChoices("RELIEFWEB_APPNAME"),
+    )
+    desk_model: str = Field(
+        default="claude-opus-5-5",
+        validation_alias=AliasChoices("DESK_MODEL"),
+    )
+    gdelt_min_interval_s: float = 5.5
     opportunity_max: int = 5
     assays_per_day: int = 10
     desk_reserve_usd: float = 0.40

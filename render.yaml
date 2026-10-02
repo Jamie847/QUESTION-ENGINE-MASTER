@@ -36,6 +36,10 @@ envVarGroups:
         sync: false
       - key: FRED_API_KEY
         sync: false
+      - key: RELIEFWEB_APPNAME
+        sync: false
+      - key: DESK_MODEL
+        value: claude-opus-5-5
       - key: DISPLAY_TZ
         value: "UTC"
       - key: SNIPPET_CHARS
@@ -95,7 +99,9 @@ services:
     # One-shot WO-011 link repair (later deploys print skipped=1).
     # --close-orphans fails running rows that no longer hold the lock
     # (a deploy that killed the worker).
-    preDeployCommand: python -m swarm.run_daily --repair-links --close-orphans --backfill-memory
+    # --refuse-if-locked fails the deploy (old instance keeps serving)
+    # when a run still holds the lock. Never cut over mid-swarm.
+    preDeployCommand: python -m swarm.run_daily --refuse-if-locked --repair-links --close-orphans --backfill-memory
     startCommand: uvicorn dashboard.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /healthz
     envVars:

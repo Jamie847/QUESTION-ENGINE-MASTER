@@ -55,6 +55,7 @@ _KEY_ATTR = {
     "sam_gov": "sam_gov_api_key",
     "eia": "eia_api_key",
     "fred": "fred_api_key",
+    "reliefweb": "reliefweb_appname",
 }
 
 

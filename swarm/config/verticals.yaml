@@ -63,7 +63,7 @@ verticals:
       - "541512"
     # draft — tune after first run
     federal_register_agencies:
-      - bureau-of-industry-and-security
+      - industry-and-security-bureau
       - commerce-department
       - national-institute-of-standards-and-technology
       - federal-communications-commission
@@ -333,8 +333,8 @@ verticals:
       - ukraine
       - gaza
     federal_register_agencies:
-      - office-of-foreign-assets-control
-      - bureau-of-industry-and-security
+      - foreign-assets-control-office
+      - industry-and-security-bureau
       - state-department
       - treasury-department
     arxiv_categories: []

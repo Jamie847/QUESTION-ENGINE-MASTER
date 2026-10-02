@@ -12,8 +12,7 @@ from swarm.settings import get_settings
 from swarm.sources.base import SourceAdapter
 from swarm.sources.snippets import clip_snippet
 
-API = "https://api.reliefweb.int/v1/reports"
-APPNAME = "question-engine"
+API = "https://api.reliefweb.int/v2/reports"
 
 
 def extract_reports(payload: dict[str, Any]) -> list[dict[str, Any]]:
@@ -28,6 +27,9 @@ class ReliefWebSource(SourceAdapter):
 
     async def fetch(self) -> list[Signal]:
         settings = get_settings()
+        appname = (settings.reliefweb_appname or "").strip()
+        if not appname:
+            return []
         headers = {"User-Agent": settings.user_agent, "Accept": "application/json"}
         queries: list[tuple[str, str]] = []
         for vertical in verticals():
@@ -41,7 +43,7 @@ class ReliefWebSource(SourceAdapter):
                 resp = await client.get(
                     API,
                     params={
-                        "appname": APPNAME,
+                        "appname": appname,
                         "query[value]": query,
                         "limit": 10,
                         "preset": "latest",
