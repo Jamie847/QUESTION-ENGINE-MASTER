@@ -4,6 +4,8 @@ from swarm.db import init_db, session_scope
 from swarm.lock import (
     LockBusy,
     acquire_lock,
+    close_orphans_on_startup,
+    current_lock,
     fail_unlocked_running_runs,
     held_run_id,
     locked_run_id,
@@ -106,3 +108,102 @@ def test_refuse_if_locked_fails_deploy_when_a_run_holds_the_lock(capsys):
     rc = main(["--refuse-if-locked"])
     assert rc == 0
     assert "REFUSE_DEPLOY ok" in capsys.readouterr().out
+
+
+def test_stale_lock_is_not_in_progress_and_orphan_is_closed():
+    """Run 26: lock older than 2h must not 409 /api/run, and must be reaped."""
+    from datetime import datetime, timedelta, timezone
+
+    from fastapi.testclient import TestClient
+
+    from dashboard.main import app
+    from swarm.orm import RunLockRow
+    from swarm.run_daily import main
+
+    init_db()
+    release_lock()
+    with session_scope() as session:
+        session.query(RunRow).filter(RunRow.id == 26).delete()
+        session.add(RunRow(id=26, status="running", current_stage="desk"))
+    acquire_lock(26)
+    with session_scope() as session:
+        lock = session.get(RunLockRow, "daily")
+        assert lock is not None
+        lock.acquired_at = datetime.now(timezone.utc) - timedelta(seconds=8000)
+
+    assert held_run_id() is None
+    assert current_lock() is None
+    assert locked_run_id() == 26
+
+    client = TestClient(app)
+    status = client.get("/api/status")
+    assert status.status_code == 200
+    assert status.json()["running"] is False
+
+    closed = close_orphans_on_startup()
+    assert closed >= 1
+    assert locked_run_id() is None
+    with session_scope() as session:
+        row = session.get(RunRow, 26)
+        assert row is not None
+        assert row.status == "failed"
+        assert "orphan" in (row.error or "")
+        assert row.finished_at is not None
+
+    release_lock()
+    with session_scope() as session:
+        session.query(RunRow).filter(RunRow.id == 26).delete()
+        session.add(RunRow(id=26, status="running", current_stage="desk"))
+    acquire_lock(26)
+    with session_scope() as session:
+        lock = session.get(RunLockRow, "daily")
+        lock.acquired_at = datetime.now(timezone.utc) - timedelta(seconds=8000)
+    rc = main(["--close-orphans"])
+    assert rc == 0
+    assert locked_run_id() is None
+    with session_scope() as session:
+        row = session.get(RunRow, 26)
+        assert row.status == "failed"
+
+
+def test_api_run_does_not_409_on_a_stale_lock(monkeypatch):
+    """POST /api/run used current_lock() with no stale check — 409 forever."""
+    from datetime import datetime, timedelta, timezone
+
+    from fastapi.testclient import TestClient
+
+    from dashboard import main as dash
+    from swarm.orm import RunLockRow
+
+    init_db()
+    release_lock()
+    with session_scope() as session:
+        session.query(RunRow).filter(RunRow.id == 26).delete()
+        session.add(RunRow(id=26, status="running", current_stage="desk"))
+    acquire_lock(26)
+    with session_scope() as session:
+        lock = session.get(RunLockRow, "daily")
+        lock.acquired_at = datetime.now(timezone.utc) - timedelta(seconds=8000)
+
+    monkeypatch.setattr(dash, "refuse_if_over_ceiling", lambda: None)
+    monkeypatch.setattr(dash, "refuse_if_cooling_down", lambda _req: None)
+
+    class _QuietThread:
+        def __init__(self, target=None, daemon=False):
+            self._target = target
+
+        def start(self):
+            return None
+
+        def is_alive(self):
+            return False
+
+    monkeypatch.setattr(dash.threading, "Thread", _QuietThread)
+    client = TestClient(app := dash.app)
+    res = client.post("/api/run")
+    assert res.status_code == 200
+    assert res.json()["started"] is True
+    with session_scope() as session:
+        row = session.get(RunRow, 26)
+        assert row.status == "failed"
+    assert locked_run_id() is None

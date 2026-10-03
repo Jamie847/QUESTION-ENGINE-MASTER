@@ -16,7 +16,7 @@ from sqlalchemy import func, select
 from swarm.config import lenses, verticals
 from swarm.db import init_db, pgvector_installed, ping_db, session_scope
 from swarm.dedup import sample_near_miss_pairs
-from swarm.lock import current_lock, locked_run_id
+from swarm.lock import close_orphans_on_startup, current_lock, held_run_id
 from swarm.publish_gate import gate_reasons, publish_gate_open
 from swarm.staleness import digest_age_days, is_stale, last_run_label
 from swarm.models import Coverage, DecayClass, Question, QuestionStatus
@@ -106,6 +106,9 @@ async def lifespan(_app: FastAPI):
             settings.run_cooldown_seconds,
         )
     init_db()
+    closed = close_orphans_on_startup()
+    if closed:
+        log.warning("closed %s orphaned run(s) on startup", closed)
     yield
 
 
@@ -182,7 +185,7 @@ def _latest_digest() -> DigestRow | None:
 
 
 def _active_run() -> RunRow | None:
-    run_id = locked_run_id()
+    run_id = held_run_id()
     if run_id is None:
         return None
     with session_scope() as session:
@@ -1013,6 +1016,7 @@ def trigger_run(request: Request, force: bool = Query(False)):
     refuse_if_cooling_down(request)
     if current_lock() is not None and not force:
         raise HTTPException(409, "A swarm run is already in progress")
+    close_orphans_on_startup()
     with _run_lock:
         if _run_thread and _run_thread.is_alive():
             raise HTTPException(409, "A swarm run is already in progress")

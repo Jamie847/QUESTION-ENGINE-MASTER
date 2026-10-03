@@ -104,7 +104,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--close-orphans",
         action="store_true",
-        help="Mark running rows that do not hold the daily lock as failed. Does not start a run.",
+        help="Fail running rows that do not hold a live lock and drop a stale lock. Does not start a run.",
     )
     parser.add_argument(
         "--backfill-memory",
@@ -177,6 +177,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.rerender_digest:
         return _rerender_digest(None if args.rerender_digest == "latest" else args.rerender_digest)
+    closed = fail_unlocked_running_runs()
+    if closed:
+        print(f"CLOSE_ORPHANS closed={closed}")
     run_id = args.resume
     created = False
     if not run_id:
